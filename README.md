@@ -2,10 +2,17 @@
 Dr. Gift's upstream repository of necessary files
 
 To link your repo with mine, do this ONE TIME:
-1. open Terminal/Command Prompt
+1. Open Terminal/Command Prompt
 2. Navigate to your GitHub folder
 3. Type the following prompt:
 git remote add upstream https://github.com/DanielGift/teacher-ai-lab-2026.git
+4. Type the following:
+git pull upstream main --allow-unrelated-histories
+5. Type:
+git remote add origin YOUR_REPO_LINK_HERE
+(You can find your repo link on GitHub, if you click on the upper right green button that says "Code" and copy the URL that shows up)
+6. Type:
+git push origin main
 
 To get any updates I add, do this EACH TIME:
 1. Open GitHub Desktop and make sure you are on your main or master branch.
@@ -19,15 +26,12 @@ To get any updates I add, do this EACH TIME:
 
 
 Alternative update instructions for those who prefer the command line
-1. open Terminal/Command Prompt
+1. Open Terminal/Command Prompt
 2. Navigate to your GitHub folder
 3. Type the following prompt:
-   git pull upstream main --allow-unrelated-histories
-(note that the allow-unrealted-histories flag is necessary only the first time)
-4. move any new files to where they need to go with the command:
+   git pull upstream main 
+4. Move any new files to where they need to go with the command:
    git mv FILENAME FOLDER_TO_MOVE_TO
 5. Push the updates to your online repository:
    git push origin main
-
-
 
