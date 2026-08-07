@@ -22,7 +22,8 @@ Alternative update instructions for those who prefer the command line
 1. open Terminal/Command Prompt
 2. Navigate to your GitHub folder
 3. Type the following prompt:
-   git pull upstream main
+   git pull upstream main --allow-unrelated-histories
+(note that the allow-unrealted-histories flag is necessary only the first time)
 4. move any new files to where they need to go with the command:
    git mv FILENAME FOLDER_TO_MOVE_TO
 5. Push the updates to your online repository:
