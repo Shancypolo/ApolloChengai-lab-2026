@@ -9,9 +9,6 @@ git remote add upstream https://github.com/DanielGift/teacher-ai-lab-2026.git
 4. Type the following:
 git pull upstream main --allow-unrelated-histories
 5. Type:
-git remote add origin YOUR_REPO_LINK_HERE
-(You can find your repo link on GitHub, if you click on the upper right green button that says "Code" and copy the URL that shows up)
-6. Type:
 git push origin main
 
 To get any updates I add, do this EACH TIME:
