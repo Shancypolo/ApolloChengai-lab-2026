@@ -4,24 +4,24 @@ import sys
 
 
 def clean_header(header):
-    # Spaces, capital letters, and a BOM can make the same header
-    # look different to a program.
+    # Make column names match even if they have extra spaces,
+    # different capital letters, or a hidden BOM character.
     return header.strip().lstrip("\ufeff").casefold()
 
 
 def get_delimiter(text):
-    # Excel can save a table with commas, semicolons, or tabs.
-    # Sniffer checks the header and sample rows to guess the separator.
+    # Excel files may use commas, semicolons, tabs, or pipes.
+    # Try to detect which one is being used.
     try:
         return csv.Sniffer().sniff(text[:4096], delimiters=",;\t|").delimiter
     except csv.Error:
-        # A normal comma CSV is the safest fallback when guessing fails.
+        # If we can't tell, assume a normal comma-separated file.
         return ","
 
 
 def open_csv(filename):
-    # utf-8-sig removes an optional UTF-8 BOM added by Excel.
-    # utf-16 and cp1252 cover other common Windows/Excel exports.
+    # Some files are saved in different text encodings.
+    # Try the most common ones until one works.
     for encoding in ("utf-8-sig", "utf-16", "cp1252"):
         try:
             with open(filename, "r", encoding=encoding, newline="") as file:
@@ -30,21 +30,21 @@ def open_csv(filename):
         except UnicodeDecodeError:
             continue
 
-    # If none of the usual encodings worked, show the real file error.
+    # If nothing works, try one more time and let Python show the error.
     with open(filename, "r", encoding="utf-8-sig", newline="") as file:
         return file.read()
 
 
 def number_from_text(text):
-    # Empty cells, spaces, and text such as "eighty-eight" are not scores.
+    # Ignore empty cells and text that is not a number.
     if text is None:
         return None
     text = text.strip()
     if not text:
         return None
 
-    # Excel may export numbers with a percent sign, currency sign,
-    # or thousands separators. A score of "95%" remains the score 95.
+    # Remove things like commas, dollar signs, and percent signs.
+    # Example: "95%" becomes "95".
     text = text.replace(",", "").replace("$", "").replace("%", "")
     try:
         return float(text)
@@ -53,13 +53,15 @@ def number_from_text(text):
 
 
 def read_scores(filename, warnings):
-    # Read the complete text first so delimiter detection works.
+    # First, read the whole file so we can figure out how it is separated.
     text = open_csv(filename)
     delimiter = get_delimiter(text)
-    # StringIO keeps quoted commas and quoted line breaks inside one cell.
+
+    # Use the detected separator to read the file as rows and columns.
     reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
 
-    # Keep original headers for row lookup, but compare cleaned headers.
+    # Keep the original header names, but also make a cleaned version
+    # so names like " Name " and "name" match the same column.
     original_headers = reader.fieldnames or []
     headers = {}
     for header in original_headers:
@@ -71,8 +73,8 @@ def read_scores(filename, warnings):
         warnings.append(filename + ": skipped file because it has no name column.")
         return
 
-    # These are common score names. They help us avoid averaging numeric
-    # metadata such as homeroom, year, student ID, or ZIP code.
+    # These are common names for score columns.
+    # We do not want to count things like student ID, ZIP code, or homeroom.
     score_names = {
         "grade", "grades", "score", "scores", "mark", "marks",
         "math", "science", "english", "reading", "writing",
@@ -83,14 +85,13 @@ def read_scores(filename, warnings):
         "zip", "zipcode", "zip code",
     }
 
-    # Prefer a single grade/score column when one exists.
+    # Pick the columns that look like grades.
     score_headers = []
     for cleaned, original in headers.items():
         if cleaned in score_names:
             score_headers.append(original)
 
-    # If there is no obvious score header, use numeric-looking columns,
-    # except columns whose names clearly describe metadata.
+    # If there are no obvious grade names, use the remaining numeric columns.
     if not score_headers:
         for cleaned, original in headers.items():
             if cleaned != "name" and cleaned not in metadata_names:
@@ -100,21 +101,20 @@ def read_scores(filename, warnings):
         warnings.append(filename + ": skipped file because it has no score columns.")
         return
 
-    # Tell the user which columns were not used, rather than silently
-    # pretending every column in the file was a grade.
+    # Tell the user which columns were ignored.
     for cleaned, original in headers.items():
         if original != name_header and original not in score_headers:
             warnings.append(filename + ": skipped column '" + original + "'.")
 
     for line_number, row in enumerate(reader, start=2):
-        # DictReader stores extra values under the special None key.
+        # If the row has extra values, warn the user.
         if None in row:
             warnings.append(
                 filename + ", line " + str(line_number)
                 + ": skipped extra values after the expected columns."
             )
 
-        # Ignore blank names and remove accidental spaces around names.
+        # Ignore empty names and remove extra spaces.
         name = (row.get(name_header) or "").strip()
         if not name:
             warnings.append(
@@ -128,8 +128,8 @@ def read_scores(filename, warnings):
         for header in score_headers:
             score = number_from_text(row.get(header))
             if score is None:
-                # Do not give a student a partial average when one subject
-                # is blank or invalid; skip the incomplete row instead.
+                # If a row is missing a score, skip that entire row.
+                # This prevents a bad grade from hurting the average.
                 bad_score = True
                 warnings.append(
                     filename + ", line " + str(line_number)
@@ -139,14 +139,13 @@ def read_scores(filename, warnings):
                 break
             scores.append(score)
 
-        # A row needs at least one score, and every selected score must be
-        # valid, so incomplete records cannot unfairly change an average.
+        # Only keep rows that have real, complete scores.
         if scores and not bad_score:
             yield name, sum(scores) / len(scores)
 
 
 def main():
-    # Accept one or more CSV paths from the command line.
+    # The user can give one or more file names when running the script.
     if len(sys.argv) < 2:
         print("Warnings:")
         print("- No CSV files were supplied.")
@@ -155,8 +154,8 @@ def main():
         print("No valid student scores found.")
         return
 
-    # Store all records by lowercase name so capitalization differences
-    # such as "BOB SMITH" and "Bob Smith" become one student.
+    # Store each student's scores together.
+    # We use lowercase names so "BOB SMITH" and "Bob Smith" are treated as the same student.
     scores_by_student = {}
     display_names = {}
     warnings = []
@@ -168,8 +167,7 @@ def main():
                 scores_by_student.setdefault(identity, []).append(average)
                 display_names.setdefault(identity, name)
         except (OSError, UnicodeError, csv.Error) as error:
-            # One bad file should not prevent the other input files from
-            # being processed and reported.
+            # If one file is broken, keep going and warn the user.
             warnings.append(filename + ": skipped file (" + str(error) + ").")
 
     print("Warnings:")
@@ -185,8 +183,7 @@ def main():
         print("No valid student scores found.")
         return
 
-    # Repeated rows represent more grades for the same student, so average
-    # those row averages before finding the highest student average.
+    # Each student may have many rows. Average all of their scores together.
     student_averages = {}
     for identity, scores in scores_by_student.items():
         student_averages[identity] = sum(scores) / len(scores)
@@ -194,7 +191,7 @@ def main():
     highest_average = max(student_averages.values())
     top_students = []
     for identity, average in student_averages.items():
-        # Keep every student tied for first place.
+        # If students tie for the highest average, show all of them.
         if average == highest_average:
             top_students.append(display_names[identity])
 
