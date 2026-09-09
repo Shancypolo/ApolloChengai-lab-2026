@@ -1,0 +1,33 @@
+hiking routes
+
+objective properties
+ - location
+ - country
+ - language
+ - total length
+ - group size
+ - available start time and daylight
+ - current season
+ - loop, out-and-back, or point-to-point route
+ - hiking time
+ - restrooms, shelters, campsites, and other facilities
+ - cell phone coverage
+ - wildfire risk
+ - car, bicycle, or wheelchair access
+ - price
+ - charity opportunity
+ - public transit
+ - wildlife
+ - top view
+ - commercial presence
+
+subjective properties and preferences
+ - endurance/explosive power
+ - budget
+ - safety concerns
+ - accessibility needs
+ - altitude-sickness risk or high-altitude experience
+ - dog-friendly preference
+ - child-friendly preference
+ - wildlife interests
+ - popularity constraint
