@@ -151,6 +151,17 @@ class TrailRecommenderTests(unittest.TestCase):
             )
             self.assertTrue(valid, answer)
 
+    def test_guard_accepts_any_nonempty_answer(self):
+        for answer in ("banana", "maybe", "later", "I do not know yet", "🌲"):
+            client = FakeClient([good_guard()])
+            valid, _ = app.guard_answer(
+                client,
+                "start_time",
+                "When might you start?",
+                answer,
+            )
+            self.assertTrue(valid, answer)
+
     def test_guard_rejects_prompt_injection(self):
         client = FakeClient([good_guard(status="unsafe")])
         valid, _ = app.guard_answer(

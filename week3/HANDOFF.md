@@ -50,7 +50,7 @@ Soft relaxation order:
 
 ## AI contracts
 
-The guard call receives one field, one question, and one marked user answer. It returns `valid`, `unclear`, or `unsafe`, plus detected language. It accepts natural fragments such as `sunset` and `when it's bright in day` for a time question. It has no permission to perform actions.
+The guard call receives one field, one question, and one marked user answer. It returns `valid`, `unclear`, or `unsafe`, plus detected language. It accepts any nonempty answer and leaves relevance, completeness, and follow-up decisions to the main AI. It has no permission to perform actions.
 
 The main question call receives the field guide, prior answers, conversation history, and hidden question counters. It returns one generated question or `done`, concise feedback about the latest answer, fields newly answered, fields covered by the next question, and whether the question is a clarification.
 
@@ -87,11 +87,11 @@ The program asks for a broad area and does not request an exact address. It does
 ## Tests
 
 ```powershell
-py -m py_compile trail_recommender.py test_trail_recommender.py
-py -m unittest test_trail_recommender -v
+py -m py_compile trail_recommender.py verify_trail_recommender.py
+py -m unittest verify_trail_recommender -v
 ```
 
-Tests cover Unicode answers, natural time phrases, guard retries, dynamic question generation, field skipping, clarification follow-ups, source allowlisting, both required tools, match relaxation text, output meta suppression, question limits, and maximum control nesting.
+Tests cover Unicode answers, permissive nonempty answers, natural time phrases, guard retries, dynamic question generation, field skipping, clarification follow-ups, source allowlisting, both required tools, match relaxation text, output meta suppression, question limits, and maximum control nesting.
 
 ## Maintenance
 
