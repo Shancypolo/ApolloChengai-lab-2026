@@ -21,9 +21,9 @@ Python 3.14 is the verified local version. `openai==3.11.0` is pinned because cu
 1. Configure stdin, stdout, and stderr for UTF-8.
 2. Create an OpenAI client with a 60-second timeout and two SDK retries.
 3. Ask the main AI for the first question, requiring geography first.
-4. Send each answer to a separate low-reasoning guard call.
-5. Retry unclear or unsafe answers three times.
-6. Send the full conversation to the main AI for feedback and the next question.
+4. Send each answer to the main AI as untrusted data.
+5. Let the main AI decide whether it understood, needs clarification, or must redirect.
+6. Print main-AI feedback and ask the next generated question.
 7. Skip fields already covered by earlier answers.
 8. Ask focused follow-ups when the main AI marks an answer unclear.
 9. Search with Responses API `tool_search` and `web_search`.
@@ -50,9 +50,7 @@ Soft relaxation order:
 
 ## AI contracts
 
-The guard call receives one field, one question, and one marked user answer. It returns `valid`, `unclear`, or `unsafe`, plus detected language. It accepts any nonempty answer and leaves relevance, completeness, and follow-up decisions to the main AI. It has no permission to perform actions.
-
-The main question call receives the field guide, prior answers, conversation history, and hidden question counters. It returns one generated question or `done`, concise feedback about the latest answer, fields newly answered, fields covered by the next question, and whether the question is a clarification.
+The main question call receives the field names, prior answers, conversation history, and hidden question counters. It returns one generated question or `done`, concise feedback about the latest answer, an answer status, fields newly answered, fields covered by the next question, and whether the question is a clarification.
 
 The recommendation call receives the collected answers and the current relaxation level. It returns match quality, a need-more-information flag, a short note, and recommendations. Each recommendation must contain facts, pre-trip checks, and at least one source object.
 
@@ -79,7 +77,7 @@ The program asks for a broad area and does not request an exact address. It does
 
 - Missing API key: friendly setup message and exit code 1.
 - Missing location: friendly request for a broad U.S. area and exit code 1.
-- Guard rejects an answer three times: continue with `no preference`, except location.
+- Main AI cannot use an answer: ask another generated question or stop safely.
 - Invalid model JSON or source URL: friendly retry message and exit code 1.
 - Network or SDK failure: friendly retry message and exit code 1.
 - Ctrl+C: friendly cancellation message and exit code 130.
@@ -91,7 +89,7 @@ py -m py_compile trail_recommender.py verify_trail_recommender.py
 py -m unittest verify_trail_recommender -v
 ```
 
-Tests cover Unicode answers, permissive nonempty answers, natural time phrases, guard retries, dynamic question generation, field skipping, clarification follow-ups, source allowlisting, both required tools, match relaxation text, output meta suppression, question limits, and maximum control nesting.
+Tests cover Unicode answers, permissive nonempty answers, natural time phrases, prompt-injection handling, dynamic question generation, field skipping, clarification follow-ups, source allowlisting, both required tools, match relaxation text, output meta suppression, question limits, and maximum control nesting.
 
 ## Maintenance
 
