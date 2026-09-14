@@ -26,7 +26,7 @@ Python 3.14 is the verified local version. `openai==3.11.0` is pinned because cu
 6. Print main-AI feedback and ask the next generated question.
 7. Skip fields already covered by earlier answers.
 8. Ask focused follow-ups when the main AI marks an answer unclear.
-9. Search once with Responses API `tool_search` and `web_search` after interviewing.
+9. Search once per relaxation step with Responses API `tool_search` and `web_search` after interviewing.
 10. Restrict web search to the six source domains.
 11. Validate structured result data and every source URL locally.
 12. Relax soft preferences in a fixed order when no good match exists.
@@ -50,9 +50,9 @@ Soft relaxation order:
 
 ## AI contracts
 
-The main question call receives field names, structured answers, the latest exchange, and hidden question counters. Question calls do not load web or tool-search definitions. It returns one generated question or `done`, concise feedback about the latest answer, an answer status, fields newly answered, fields covered by the next question, and whether the question is a clarification.
+The main question call receives field names, structured answers, the latest exchange, and hidden question counters. Question calls do not load web or tool-search definitions and use a small output limit. It returns one generated question or `done`, concise feedback about the latest answer, an answer status, fields newly answered, fields covered by the next question, and whether the question is a clarification.
 
-The recommendation call receives the collected answers and the current relaxation level. It returns match quality, a need-more-information flag, a short note, and recommendations. Each recommendation must contain facts, pre-trip checks, and at least one source object.
+The recommendation call receives the collected answers and the current relaxation level. It is the only call that loads search tools. It returns match quality, a need-more-information flag, a short note, and recommendations. Each recommendation must contain facts, pre-trip checks, and at least one source object.
 
 The application never executes model text, follows model-provided commands, or fetches arbitrary URLs. Model text is cleaned before terminal output.
 
@@ -93,6 +93,6 @@ Tests cover Unicode answers, permissive nonempty answers, natural time phrases, 
 
 ## Maintenance
 
-Keep `MODEL`, `SOURCE_DOMAINS`, `FIELD_GUIDE`, `RELAXATIONS`, and all JSON schemas synchronized. Any change to source domains requires updates to the web-search tool payload, URL validation, tests, and this document. Any change to user-visible wording must preserve casual language and avoid internal implementation details.
+Keep model, source domains, field names, relaxation steps, prompts, and JSON response contracts synchronized. Any change to source domains requires updates to the web-search tool payload, URL validation, tests, and this document. Any change to user-visible wording must preserve casual language and avoid internal implementation details.
 
 Do not add scraping, arbitrary URL fetching, shell tools, persistent user profiles, or hidden prompt disclosure features without a new security review.
