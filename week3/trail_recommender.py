@@ -142,24 +142,27 @@ def response_json(
     input_text: str,
     reasoning: str,
     choice: str,
+    use_tools: bool = False,
+    max_output_tokens: int = 700,
 ) -> dict[str, object]:
-    tool_choice: object = choice
-    if choice == "auto":
-        tool_choice = {
+    request = {
+        "model": MODEL,
+        "instructions": instructions,
+        "input": input_text,
+        "reasoning": {"effort": reasoning},
+        "text": {"format": {"type": "json_object"}, "verbosity": "low"},
+        "store": False,
+        "max_output_tokens": max_output_tokens,
+        "prompt_cache_key": "trail-recommender",
+    }
+    if use_tools:
+        request["tools"] = TOOLS
+        request["tool_choice"] = {
             "type": "allowed_tools",
             "mode": "auto",
             "tools": [{"type": "web_search"}],
         }
-    response = client.responses.create(
-        model=MODEL,
-        instructions=instructions,
-        input=input_text,
-        tools=TOOLS,
-        tool_choice=tool_choice,
-        reasoning={"effort": reasoning},
-        text={"format": {"type": "json_object"}, "verbosity": "low"},
-        store=False,
-    )
+    response = client.responses.create(**request)
     value = json.loads(response.output_text)
     if not isinstance(value, dict):
         raise ValueError("AI response was not an object")
@@ -251,7 +254,7 @@ def main_question(client: OpenAI, session: InterviewSession) -> dict[str, object
             "field_names": FIELDS,
             "covered_fields": sorted(session.covered_fields),
             "answers": session.answers,
-            "conversation": session.history,
+            "last_exchange": session.history[-1:],
             "question_count": len(session.asked),
             "question_characters": session.question_characters,
             "seconds_elapsed": round(time.monotonic() - session.started, 1),
@@ -261,7 +264,14 @@ def main_question(client: OpenAI, session: InterviewSession) -> dict[str, object
     )
     repair = ""
     for _ in range(MAX_QUESTION_REPAIRS + 1):
-        result = response_json(client, instructions, input_text + repair, "low", "none")
+        result = response_json(
+            client,
+            instructions,
+            input_text + repair,
+            "low",
+            "none",
+            max_output_tokens=700,
+        )
         for key in ("question", "feedback"):
             if isinstance(result.get(key), str):
                 result[key] = one_line(result[key])

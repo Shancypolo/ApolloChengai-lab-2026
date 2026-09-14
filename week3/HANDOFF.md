@@ -19,14 +19,14 @@ Python 3.14 is the verified local version. `openai==3.11.0` is pinned because cu
 ## Runtime flow
 
 1. Configure stdin, stdout, and stderr for UTF-8.
-2. Create an OpenAI client with a 60-second timeout and two SDK retries.
+2. Create an OpenAI client with a 60-second timeout and no automatic SDK retries.
 3. Ask the main AI for the first question, requiring geography first.
 4. Send each answer to the main AI as untrusted data.
 5. Let the main AI decide whether it understood, needs clarification, or must redirect.
 6. Print main-AI feedback and ask the next generated question.
 7. Skip fields already covered by earlier answers.
 8. Ask focused follow-ups when the main AI marks an answer unclear.
-9. Search with Responses API `tool_search` and `web_search`.
+9. Search once with Responses API `tool_search` and `web_search` after interviewing.
 10. Restrict web search to the six source domains.
 11. Validate structured result data and every source URL locally.
 12. Relax soft preferences in a fixed order when no good match exists.
@@ -50,7 +50,7 @@ Soft relaxation order:
 
 ## AI contracts
 
-The main question call receives the field names, prior answers, conversation history, and hidden question counters. It returns one generated question or `done`, concise feedback about the latest answer, an answer status, fields newly answered, fields covered by the next question, and whether the question is a clarification.
+The main question call receives field names, structured answers, the latest exchange, and hidden question counters. Question calls do not load web or tool-search definitions. It returns one generated question or `done`, concise feedback about the latest answer, an answer status, fields newly answered, fields covered by the next question, and whether the question is a clarification.
 
 The recommendation call receives the collected answers and the current relaxation level. It returns match quality, a need-more-information flag, a short note, and recommendations. Each recommendation must contain facts, pre-trip checks, and at least one source object.
 
@@ -89,7 +89,7 @@ py -m py_compile trail_recommender.py verify_trail_recommender.py
 py -m unittest verify_trail_recommender -v
 ```
 
-Tests cover Unicode answers, permissive nonempty answers, natural time phrases, prompt-injection handling, dynamic question generation, field skipping, clarification follow-ups, source allowlisting, both required tools, match relaxation text, output meta suppression, question limits, and maximum control nesting.
+Tests cover Unicode answers, permissive nonempty answers, natural time phrases, prompt-injection handling, dynamic question generation, field skipping, clarification follow-ups, question-call tool omission, source allowlisting, both search tools, match relaxation text, output meta suppression, question limits, and maximum control nesting.
 
 ## Maintenance
 

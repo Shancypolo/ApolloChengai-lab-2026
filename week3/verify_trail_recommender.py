@@ -246,6 +246,15 @@ class TrailRecommenderTests(unittest.TestCase):
             app.SOURCE_DOMAINS,
         )
 
+    def test_question_call_does_not_load_search_tools(self):
+        client = FakeClient(
+            [ask_result("What broad U.S. area sounds good?", ["location"])]
+        )
+        app.main_question(client, app.InterviewSession())
+        payload = client.responses.calls[0]
+        self.assertNotIn("tools", payload)
+        self.assertEqual(payload["max_output_tokens"], 700)
+
     def test_render_does_not_show_internal_meta(self):
         with patch("builtins.print") as printer:
             app.render(good_result(), "")
