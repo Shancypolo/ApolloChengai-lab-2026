@@ -1,4 +1,6 @@
-When input is general, vague, incomplete, or ambiguous, retain any clear preference, leave the rest flexible, and move to another factor. Do not ask a clarification question or repeat the topic. Use the OpenAI Responses API with model gpt-5.6-luna, medium reasoning, low verbosity, store=False, and a stable prompt-cache key.
+When input is general, vague, incomplete, or ambiguous inerpret in a way that fits the story context, then generate next chapter.
+If input is clearly malicious, raise error and exit. 
+Use the OpenAI Responses API with model gpt-5.6-luna, medium reasoning, low verbosity, store=False, and a stable prompt-cache key.
 - Use functional programming for transformations, validation, normalization, and rendering.
 - Use object-oriented programming only through small concrete objects that own real state. Do not add abstract base classes, factories, inheritance trees, generic framework layers, or templates.
 - Keep control nesting at four levels or fewer.
@@ -14,7 +16,4 @@ keep same starting story
 make no more than 9 decisions, atleast 4 decisions, or when user says end of story.
 every decision must be at important moment 
 don't use any tools
-guide to good conclusions
-comments for upcoming quiz
-always use 3rd person
 don't change story metainformation

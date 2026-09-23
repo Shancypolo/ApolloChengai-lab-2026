@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "step": 0,
+  "rules": {
+    "protagonist.silence": "He never speaks. He communicates through gestures, expressions, and sometimes brief writing. The story never explains why he does not speak.",
+    "protagonist.unknown_history": "Treat his history beyond confirmed facts as unknown. Familiarity with the valley may appear without an explanation.",
+    "story.supernatural_ambiguity": "A slight magical element may appear, but the story never confirms that anything supernatural is real. Leave ordinary explanations possible.",
+    "story.photograph_limit": "Each of the five exposures is a permanent choice. No replacement film is available before the flood. The photographs can preserve only fragments of the valley, not save it.",
+    "story.memory_theme": "Memory is the central theme. Keep in view that photographs, film, paper, and names can fade or be forgotten, while people also remember places through lives and events.",
+    "story.soundscape": "Sound matters because the protagonist has no spoken voice. Human sounds grow rarer as the day continues.",
+    "story.possible_photo_anomalies": "After development, photographs may seem to show details he does not remember seeing. Possible details include a person at an empty doorway, children beside a closed school, or a distant boat. Keep each open to reflections, film damage, double exposure, or imperfect memory; do not decide what happened."
+  },
+  "facts": {
+    "world.setting": "The story takes place in the early 1970s on a small, humid, mountainous, politically independent Caribbean island nation.",
+    "world.modernization": "The island is divided between older rural life and a government pursuing modernization through roads, electricity, concrete construction, and large public works.",
+    "dam.project": "A newly completed hydroelectric dam is about to flood a river valley in the island's interior to create a reservoir.",
+    "dam.purpose": "The dam is expected to bring electricity and irrigation to thousands of people. It may genuinely improve life elsewhere on the island.",
+    "dam.government_view": "The government presents the dam as necessary progress. Radio announcements celebrate electricity, factories, irrigation, and national independence. Officials describe the valley in figures such as acreage, megawatts, water capacity, and relocation totals; those figures are not entirely dishonest.",
+    "valley.evacuations": "Several old communities have been evacuated for the reservoir. Most of the valley is already empty, though the final occupied house remains a possible destination.",
+    "protagonist.home": "The protagonist grew up in the valley and has lived there for as long as he can remember.",
+    "protagonist.familiarity": "He knows shortcuts, which stairs creak, and where the river deepens. He sometimes stops at ordinary places and photographs nothing.",
+    "protagonist.residents": "Some people recognize him immediately. Others look at his camera as if they remember it too. People speak to him; some seem used to his silence, while others hesitate as if expecting an answer.",
+    "camera.condition": "His camera is old and heavily used, with metal worn smooth in places. He handles it as something familiar and long present, but its origin is unclear.",
+    "camera.film_supply": "Film and chemicals must be imported, making photography expensive. No replacement film is available before the flood.",
+    "technology.communication": "Radios are common and telephones are not. News travels through newspapers, buses, letters, gossip, and government broadcasts.",
+    "technology.photo_review": "A photograph cannot be checked immediately; he may waste an exposure without knowing it.",
+    "valley.landscape": "The green valley is enclosed by volcanic ridges. Cane grows along lower fields; mango, breadfruit, palms, and ceiba trees surround houses. Roads are narrow and sun-bleached. Buildings include old plaster walls, wooden shutters, tiled floors, corrugated roofs, and newer concrete additions.",
+    "evacuation.remnants": "Possible signs of interrupted daily life include a radio still playing in an empty café, a ticking clock in an abandoned house, laundry left on a line, and a half-finished domino game. These are available details, not required facts about every location.",
+    "world.soundscape": "Environmental sounds include cicadas, church bells, trucks carrying possessions away, distant dam machinery, baseball commentary on radios, wind through cane, barking dogs, and waves against the coast.",
+    "culture.oral_tradition": "The island has a strong oral culture of songs, family stories, legends, and religious traditions.",
+    "culture.local_beliefs": "Catholic saints coexist in local culture with stories about river spirits, warnings in dreams, and old beliefs about certain trees and stretches of water. These beliefs do not confirm supernatural events.",
+    "memory.valley": "People have remembered the valley for generations through who lived in houses and events associated with trees, roads, songs, arguments, weddings, storms, and deaths.",
+    "places.available": "The protagonist can go to the white church and bell tower; cemetery overlooking the river; abandoned sugar mill; old suspension bridge; closed village cinema; his childhood street; empty schoolhouse; market square; riverside baseball field; roadside shrine; giant ceiba tree; abandoned barber shop; mango grove near town; final occupied house in the valley; dam construction site; or river bend where the first water will rise.",
+    "photography.subjects": "Famous possible subjects include the church, cemetery, bridge, and sugar mill. Private possible subjects include a bedroom wall marked with children's heights, a mango tree beside an empty house, a barber chair facing a cracked mirror, and a dog asleep beneath an abandoned bus stop."
+  },
+  "state": {
+    "story.time": "Morning, the day before the upriver gates are expected to close and flooding begins.",
+    "protagonist.location": "In town after descending the white bell tower; his exact location is unspecified.",
+    "camera.exposures_remaining": "Five photographs remain.",
+    "valley.occupancy": "Most of the valley is empty after the evacuations."
+  },
+  "events": [
+    "Several old communities were evacuated to make the dam reservoir; most of the valley is now empty.",
+    "That morning, he climbed the white bell tower's narrow stairs without looking down, as he had since childhood. He watched sunlight move across roofs, cane fields, palms, and empty roads, then descended into town carrying his camera against his chest."
+  ],
+  "threads": {
+    "dam.flooding": "The upriver gates are expected to close tomorrow, and water will begin swallowing the valley.",
+    "protagonist.photo_choices": "Before the flood, he must choose which five fragments to photograph. Choosing one means abandoning another."
+  }
+}
