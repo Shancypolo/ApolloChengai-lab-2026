@@ -20,6 +20,8 @@ from story_memory import (
     contains_fantastical_action,
     generate_story,
     load_memory,
+    validate_openai_sdk_version,
+    verify_tls_imports,
 )
 
 
@@ -252,6 +254,8 @@ def main(arguments: list[str] | None = None) -> int:
     parser.parse_args(arguments)
 
     try:
+        verify_tls_imports()
+        validate_openai_sdk_version()
         return run_story()
     except MaliciousPromptError as error:
         print(f"Error: {error}", file=sys.stderr)

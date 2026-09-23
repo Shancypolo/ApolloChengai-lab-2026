@@ -6,10 +6,11 @@ import json
 import os
 import re
 import threading
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Literal
 
-from openai import OpenAI
+from openai import APIConnectionError, APIStatusError, OpenAI
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 
@@ -116,6 +117,54 @@ class GenerationError(StoryMemoryError):
 # Detect completed sessions that should not receive another generation.
 class StoryAlreadyEndedError(StoryMemoryError):
     """Raised when a completed session receives another generation."""
+
+
+# Confirm the active interpreter uses the SDK range tested by this application.
+def validate_openai_sdk_version() -> str:
+    try:
+        installed_version = version("openai")
+        major_text, minor_text, *_ = installed_version.split(".")
+        major = int(major_text)
+        minor = int(minor_text)
+    except (PackageNotFoundError, ValueError):
+        raise ConfigurationError(
+            "The OpenAI Python package version could not be read. Install the project dependencies "
+            "with `python -m pip install -r requirements.txt` and use that interpreter to run StoryEngine."
+        ) from None
+
+    if major != 2 or minor < 54:
+        raise ConfigurationError(
+            f"OpenAI SDK {installed_version} is unsupported. StoryEngine requires openai>=2.54,<3. "
+            "Install dependencies with `python -m pip install -r requirements.txt`, then run StoryEngine "
+            "with that same environment's Python interpreter."
+        )
+    return installed_version
+
+
+# Verify the certificate bundle and detect the optional HTTPX2 transport import.
+def verify_tls_imports() -> tuple[str, str | None]:
+    try:
+        import certifi
+
+        certificate_bundle = Path(certifi.where())
+    except (AttributeError, ImportError, OSError) as error:
+        raise ConfigurationError(
+            "The certifi certificate bundle could not be loaded. Reinstall project dependencies."
+        ) from error
+
+    if not certificate_bundle.is_file():
+        raise ConfigurationError(
+            "The certifi certificate bundle is missing. Reinstall project dependencies."
+        )
+
+    try:
+        import httpx2
+    except ImportError:
+        httpx2_version = None
+    else:
+        httpx2_version = getattr(httpx2, "__version__", "available")
+
+    return str(certificate_bundle), httpx2_version
 
 
 # Read the remaining exposure count from canonical state or initial story rules.
@@ -670,6 +719,8 @@ def generate_story(
                 "OPENAI_API_KEY is missing. Set it in your terminal, then start StoryEngine again."
             )
 
+        validate_openai_sdk_version()
+
         try:
             # Initialize a bounded client so transient failures cannot retry forever.
             client = OpenAI(
@@ -691,9 +742,24 @@ def generate_story(
                 text_format=GenerationResult,
             )
         except Exception as error:
-            raise GenerationError(
-                "OpenAI request failed; session memory was not changed. Check API access or network and try again."
-            ) from error
+            if isinstance(error, APIConnectionError):
+                detail = "Could not connect to the OpenAI API; check network, proxy, or TLS settings."
+            elif isinstance(error, APIStatusError):
+                status_code = error.status_code
+                if status_code == 401:
+                    detail = "OpenAI rejected the API key (HTTP 401). Check OPENAI_API_KEY."
+                elif status_code == 403:
+                    detail = "OpenAI denied this request (HTTP 403). Check account and model access."
+                elif status_code == 429:
+                    detail = "OpenAI rate or usage limit reached (HTTP 429). Check account usage and retry later."
+                else:
+                    detail = f"OpenAI returned HTTP {status_code}. Check request and model settings."
+                request_id = getattr(error, "request_id", None)
+                if request_id:
+                    detail += f" Request ID: {request_id}."
+            else:
+                detail = f"OpenAI request failed ({type(error).__name__}). Check API and SDK setup."
+            raise GenerationError(f"{detail} Session memory was not changed.") from error
 
         result = response.output_parsed
         if result is None:

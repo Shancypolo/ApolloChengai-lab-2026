@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+
+from openai import APIConnectionError
 
 from story_memory import (
     API_MAX_RETRIES,
@@ -38,6 +41,7 @@ from story_memory import (
     remaining_photo_count,
     story_uses_photo_exposure,
     validate_memory_size,
+    verify_tls_imports,
 )
 
 
@@ -55,6 +59,35 @@ def make_result(
         ending=ending,
         photo_taken=photo_taken,
     )
+
+
+# Verify certifi's bundle and detect whether optional HTTPX2 imports correctly.
+class RuntimeImportTests(unittest.TestCase):
+    # The supported SDK works without HTTPX2, while an installed HTTPX2 must import.
+    def test_tls_import_verification(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle_path = Path(directory) / "cacert.pem"
+            bundle_path.write_text("test CA bundle", encoding="utf-8")
+            fake_certifi = SimpleNamespace(where=lambda: str(bundle_path))
+
+            for httpx2_module, expected_version in (
+                (None, None),
+                (SimpleNamespace(__version__="test-version"), "test-version"),
+            ):
+                module_overrides = {"certifi": fake_certifi, "httpx2": httpx2_module}
+                with patch.dict(sys.modules, module_overrides), self.subTest(
+                    expected_version=expected_version
+                ):
+                    certificate_bundle, httpx2_version = verify_tls_imports()
+                self.assertEqual(certificate_bundle, str(bundle_path))
+                self.assertEqual(httpx2_version, expected_version)
+
+    # A missing certificate bundle stops startup with setup guidance.
+    def test_missing_certificate_bundle_is_rejected(self) -> None:
+        fake_certifi = SimpleNamespace(where=lambda: "missing-cacert.pem")
+        with patch.dict(sys.modules, {"certifi": fake_certifi, "httpx2": None}):
+            with self.assertRaisesRegex(ConfigurationError, "certificate bundle is missing"):
+                verify_tls_imports()
 
 
 # Test that the seed file is read-only and each process receives a fresh canon copy.
@@ -256,6 +289,9 @@ class GenerationTests(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary_directory.cleanup)
         self.seed_path = Path(self.temporary_directory.name) / "story_memory.json"
+        self.sdk_version_patch = patch("story_memory.version", return_value="2.54.0")
+        self.sdk_version_patch.start()
+        self.addCleanup(self.sdk_version_patch.stop)
         self.chapter = (
             "He chose the bridge. The river moved softly below the worn boards. "
             "A fisherman watched from the far bank. Then the church bell rang, "
@@ -339,16 +375,31 @@ class GenerationTests(unittest.TestCase):
                 generate_story("He walks to the church.", StoryMemory())
         client.assert_not_called()
 
+    # An unsupported SDK fails with setup guidance before constructing the API client.
+    def test_unsupported_openai_sdk_version_fails_before_api(self) -> None:
+        session_memory = StoryMemory()
+        original = session_memory.model_dump()
+        with patch("story_memory.version", return_value="3.11.0"), patch.dict(
+            os.environ, {"OPENAI_API_KEY": "test-key"}
+        ), patch("story_memory.OpenAI") as client:
+            with self.assertRaisesRegex(ConfigurationError, "requires openai>=2.54,<3"):
+                generate_story("He studies the station timetable.", session_memory)
+        client.assert_not_called()
+        self.assertEqual(session_memory.model_dump(), original)
+
     # API errors leave caller-owned session memory unchanged.
     def test_api_failure_preserves_session_memory(self) -> None:
         session_memory = StoryMemory(step=2)
         original = session_memory.model_dump()
         client = Mock()
-        client.responses.parse.side_effect = RuntimeError("simulated network failure")
+        client.responses.parse.side_effect = APIConnectionError(
+            message="Connection error.",
+            request=None,
+        )
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
             "story_memory.OpenAI", return_value=client
         ):
-            with self.assertRaises(GenerationError):
+            with self.assertRaisesRegex(GenerationError, "Could not connect"):
                 generate_story("He returns to town.", session_memory)
         self.assertEqual(session_memory.model_dump(), original)
 
