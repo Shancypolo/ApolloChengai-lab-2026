@@ -29,7 +29,7 @@ from story_memory import (
 )
 
 
-# CLI text and regular expressions used by parsing, prompts, and terminal output.
+# CLI constants: parser, prompt, security checks, terminal output.
 CLI_PROGRAM_NAME = "storyengine"
 CLI_DESCRIPTION = "Continue the valley story with open-ended decisions."
 CLI_EPILOG_TEMPLATE = (
@@ -67,7 +67,7 @@ BASE64_CANDIDATE_PATTERN = re.compile(r"[A-Za-z0-9_+/=-]{16,}")
 BASE64_PADDING_CHARACTER = "="
 BASE64_ALTERNATE_CHARACTERS = b"-_"
 
-# Fixed direct-injection patterns applied before any story input reaches the API.
+# Prompt-injection patterns: reject direct overrides before API access.
 MALICIOUS_PROMPT_PATTERNS = (
     r"\bignore\s+(?:all\s+)?(?:previous|prior|system|developer)\s+instructions?\b",
     r"\b(?:reveal|show|print|repeat|quote|output|dump|tell)\b"
@@ -92,7 +92,7 @@ COMPACT_MALICIOUS_MARKERS = (
     "bypassallsafetymeasures",
     "overrideyoursecuritysettings",
 )
-# Correct common typos before scanning text for direct prompt injections.
+# Typo corrections: normalize common prompt-injection variants.
 TYPOGLYCEMIA_CORRECTIONS = {
     "ignroe": "ignore",
     "prevoius": "previous",
@@ -106,18 +106,19 @@ TYPOGLYCEMIA_CORRECTIONS = {
 }
 
 
-# Describe an invalid user answer that should be corrected without ending the session.
+# User input error: blank or oversized answer; prompt again.
 class UserAnswerError(ValueError):
     """Raised for blank or oversized story answers."""
 
 
-# Stop clearly malicious requests before any network call is made.
+# Prompt-injection error: stop before network access.
 class MaliciousPromptError(ValueError):
     """Raised when input attempts to override instructions or extract prompts."""
 
 
-# Convert Unicode and spacing variants into comparable plain text.
+# Security normalization: Unicode, format controls, separators, known typos.
 def normalize_security_text(user_text: str) -> str:
+    """Normalize Unicode, separators, and known typos for injection screening."""
     normalized_text = unicodedata.normalize(
         CLI_SECURITY_NORMALIZATION,
         user_text,
@@ -135,8 +136,9 @@ def normalize_security_text(user_text: str) -> str:
     return CLI_SPACE.join(normalized_words)
 
 
-# Detect direct prompt overrides, instruction extraction, and common obfuscations.
+# Prompt-injection gate: direct, compact, encoded, and typo variants.
 def is_malicious_prompt(user_answer: str) -> bool:
+    """Detect direct prompt overrides and simple encoded variants before API use."""
     normalized_answer = normalize_security_text(user_answer)
     compact_answer = normalized_answer.replace(CLI_SPACE, CLI_EMPTY_TEXT)
     if any(
@@ -173,8 +175,9 @@ def is_malicious_prompt(user_answer: str) -> bool:
     return False
 
 
-# Reject malicious, blank, or oversized answers before sending them to the API.
+# Answer validation: reject malicious, blank, or oversized input before API use.
 def validate_user_answer(user_answer: str) -> str:
+    """Reject malicious, blank, or over-limit input and return trimmed user text."""
     if is_malicious_prompt(user_answer):
         raise MaliciousPromptError(CLI_MALICIOUS_INPUT_ERROR)
     if not user_answer.strip():
@@ -184,8 +187,12 @@ def validate_user_answer(user_answer: str) -> str:
     return user_answer.strip()
 
 
-# Read one open-ended story decision, reprompting for blank or oversized answers.
+# Input loop: one open response; reprompt blank or oversized answers.
 def read_user_answer() -> str | None:
+    """Read one free-text decision and photo subject.
+
+    Reprompt blank or oversized answers. Return None on EOF for clean loop exit.
+    """
     while True:
         try:
             user_answer = input(DECISION_PROMPT)
@@ -198,8 +205,9 @@ def read_user_answer() -> str | None:
             print(CLI_ERROR_TEMPLATE.format(message=answer_error), file=sys.stderr)
 
 
-# Read and print the supplied opening verbatim at the start of every session.
+# Opening: print supplied text verbatim at session start.
 def print_opening() -> None:
+    """Write the supplied opening unchanged to stdout for each new session."""
     try:
         opening_text = STARTING_STORY_PATH.read_text(encoding=CLI_UTF8_ENCODING)
     except OSError as file_error:
@@ -209,8 +217,9 @@ def print_opening() -> None:
         sys.stdout.write(CLI_NEWLINE)
 
 
-# Use UTF-8 on Windows and macOS while leaving test streams untouched.
+# Terminal encoding: request UTF-8 on Windows and macOS.
 def configure_terminal_encoding() -> None:
+    """Request UTF-8 streams where the current terminal supports reconfiguration."""
     for terminal_stream in (sys.stdin, sys.stdout, sys.stderr):
         configure_encoding = getattr(terminal_stream, CLI_RECONFIGURE_METHOD, None)
         if callable(configure_encoding):
@@ -222,8 +231,13 @@ def configure_terminal_encoding() -> None:
             )
 
 
-# Run the interactive story until completion, EOF, or a safe failure.
+# Story loop: continue until ending, EOF, or safe failure.
 def run_story() -> int:
+    """Run one story session from read-only canon.
+
+    Print opening and accepted chapters; return conventional status on ending,
+    EOF, or handled failure. Generated memory remains in process RAM.
+    """
     session_memory = load_memory(MEMORY_PATH)
     if session_memory.state.get(ENDING_KEY):
         print(CLI_ENDING_EXISTS, file=sys.stderr)
@@ -253,8 +267,12 @@ def run_story() -> int:
             return EXIT_SUCCESS
 
 
-# Provide standard help and concise errors with conventional process exit codes.
+# CLI entry point: help, runtime checks, conventional exit codes.
 def main(command_arguments: list[str] | None = None) -> int:
+    """Provide CLI entry point for direct use and module execution.
+
+    Parse help, verify SDK/TLS setup, and map handled failures to exit codes.
+    """
     configure_terminal_encoding()
     argument_parser = argparse.ArgumentParser(
         prog=CLI_PROGRAM_NAME,
@@ -286,6 +304,6 @@ def main(command_arguments: list[str] | None = None) -> int:
         return EXIT_INTERRUPTED
 
 
-# Execute the CLI only when this module is launched as a program.
+# Module entry point: run CLI only when launched as a program.
 if __name__ == "__main__":
     raise SystemExit(main())

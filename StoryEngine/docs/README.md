@@ -2,6 +2,10 @@
 
 StoryEngine continues the valley story from `opening.txt`. Run it with Python 3.10 or newer on Windows or macOS.
 
+See [the information-flow diagram](storyengine-information-flow.md) for API, validation, and session-memory boundaries.
+
+![StoryEngine information flow](storyengine-information-flow.png)
+
 ## Setup
 
 Install dependencies and set `OPENAI_API_KEY` in the current terminal.
@@ -29,7 +33,7 @@ Use `\.venv\Scripts\python.exe storyengine.py --help` on Windows or `.venv/bin/p
 
 Install dependencies and run StoryEngine with the same virtual-environment interpreter. At startup, the program verifies the `certifi` CA bundle and attempts to import `httpx2`, then checks the OpenAI SDK version. `httpx2` is optional with supported SDK 2.x; the SDK uses regular `httpx`. Unsupported SDK versions get setup instructions before the story starts. Story generation uses high reasoning effort.
 
-To test API access without starting a story, run `\.venv\Scripts\python.exe testAPI.py` in Windows PowerShell or `.venv/bin/python testAPI.py` on macOS. This sends one short Responses API request and prints a request ID when available; it never prints the API key.
+To test API access without starting a story, run `\.venv\Scripts\python.exe -m tests.testAPI` in Windows PowerShell or `.venv/bin/python -m tests.testAPI` on macOS. This sends one short Responses API request and prints a request ID when available; it never prints the API key.
 
 The story has five photographs and ends with the protagonist drowning or leaving the valley. AI is instructed to keep events physically possible; characters may discuss local folklore.
 

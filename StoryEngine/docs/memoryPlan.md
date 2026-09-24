@@ -1,5 +1,7 @@
 # Final Minimal Story Memory Implementation
 
+> Historical design plan. Current runtime behavior and release boundaries live in [HANDOFF.md](HANDOFF.md) and [technicalRequirements.md](technicalRequirements.md). Implementation keeps generated memory in process RAM and uses AI for story-semantic checks; Python retains schema, memory-delta, and state-integrity validation.
+
 ## 1. Design goal
 
 Build smallest reliable memory subsystem possible.

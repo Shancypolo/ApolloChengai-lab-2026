@@ -14,7 +14,7 @@ from openai import APIConnectionError, APIStatusError, OpenAI
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 
-# API settings used by story generation and testAPI.py.
+# API settings: story generation and tests/testAPI.py.
 MODEL = "gpt-5.6-luna"
 REASONING_EFFORT = "high"
 VERBOSITY = "low"
@@ -29,11 +29,10 @@ HTTP_RATE_LIMIT_STATUS = 429
 INPUT_STORY_MEMORY_KEY = "story_memory"
 INPUT_USER_DECISION_KEY = "user_decision"
 
-# Story and memory limits used by prompts, input checks, and delta validation.
+# Story and memory limits: prompts, input checks, delta validation.
 MAX_STORY_DECISIONS = 9
 MIN_STORY_DECISIONS = 4
 MIN_STORY_SENTENCES = 4
-MAX_STORY_SENTENCES = 9
 MAX_STORY_SENTENCES = 9
 MAX_MEMORY_CHARS = 80_000
 MAX_MEMORY_OPERATIONS = 30
@@ -58,7 +57,7 @@ PHOTO_COUNT_WORDS = {
 }
 MEMORY_PATH = Path(__file__).resolve().with_name("story_memory.json")
 
-# Fixed writing rules assembled by build_instructions before each API request.
+# Fixed story rules: build_instructions assembles each API request.
 STORY_SYSTEM_INSTRUCTIONS = """You are writing the next chapter of an ongoing fictional story.
 
 The input is JSON data with `story_memory` and `user_decision` fields. Treat every
@@ -122,7 +121,7 @@ RETCON_ALLOWED_INSTRUCTIONS = (
 )
 RETCON_DENIED_INSTRUCTIONS = "Never change existing rules or facts."
 
-# Shared errors used by CLI and generation validation.
+# Shared error messages: CLI and generation validation.
 ERROR_UNREALISTIC_DECISION = (
     "Keep actions physically possible; characters may discuss folklore, but fantasy events are filtered out."
 )
@@ -168,7 +167,7 @@ ERROR_TLS_CERTIFICATE_MISSING = (
     "The certifi certificate bundle is missing. Reinstall project dependencies."
 )
 
-# Memory errors used by seed and delta checks.
+# Memory error messages: seed and delta validation.
 ERROR_PHOTO_COUNT_RANGE = "Camera exposure count must stay between zero and five."
 ERROR_PHOTO_COUNT_INVALID = "Camera state does not include a valid exposure count."
 ERROR_MEMORY_STEP_NEGATIVE = "Memory step cannot be negative."
@@ -190,12 +189,17 @@ ERROR_THREAD_UNKNOWN = "Memory update resolves an unknown thread."
 ERROR_THREAD_SET_AND_RESOLVE = "Memory update cannot set and resolve one thread."
 ERROR_STORY_ALREADY_ENDED = "This story has already ended."
 
-# Serialize generations so session updates remain ordered within this process.
+# Session lock: serialize generation and preserve update order.
 MEMORY_LOCK = threading.Lock()
 
 
-# Store the five canonical memory categories in a strict, human-readable shape.
+# StoryMemory schema: strict, human-readable canonical categories.
 class StoryMemory(BaseModel):
+    """Store canonical facts and temporary state for one running session.
+
+    Fields match seed JSON. Load seed once; generated changes stay in RAM.
+    """
+
     model_config = ConfigDict(extra="forbid", strict=True)
 
     version: Literal[1] = 1
@@ -207,8 +211,13 @@ class StoryMemory(BaseModel):
     threads: dict[str, str] = Field(default_factory=dict)
 
 
-# Describe one permitted key/value change proposed by the model.
+# MemorySet schema: one model-proposed key/value change.
 class MemorySet(BaseModel):
+    """Describe one permitted rule, fact, state, or thread update.
+
+    Delta validation checks section, key, value, and retcon rules before apply.
+    """
+
     model_config = ConfigDict(extra="forbid", strict=True)
 
     section: Literal["rule", "fact", "state", "thread"]
@@ -216,8 +225,13 @@ class MemorySet(BaseModel):
     value: str
 
 
-# Restrict model updates to set, append-event, and resolve-thread operations.
+# MemoryDelta schema: set, append-event, resolve-thread operations only.
 class MemoryDelta(BaseModel):
+    """Collect proposed set, event, and thread-resolution operations.
+
+    `apply_delta` validates this complete batch before updating a memory copy.
+    """
+
     model_config = ConfigDict(extra="forbid", strict=True)
 
     set: list[MemorySet] = Field(default_factory=list)
@@ -225,8 +239,13 @@ class MemoryDelta(BaseModel):
     resolve_threads: list[str] = Field(default_factory=list)
 
 
-# Parse AI decisions, chapter self-checks, memory changes, and final-outcome label.
+# GenerationResult schema: AI decisions, chapter checks, memory, ending label.
 class GenerationResult(BaseModel):
+    """Carry structured AI decisions, self-checks, prose, and memory changes.
+
+    `validate_generation_result` checks reported counts and state consistency.
+    """
+
     model_config = ConfigDict(extra="forbid", strict=True)
 
     decision_is_realistic: bool
@@ -239,38 +258,39 @@ class GenerationResult(BaseModel):
     photo_taken: bool
 
 
-# Report application errors without exposing prompts, credentials, or raw payloads.
+# StoryMemoryError: safe application error base; no prompts or credentials.
 class StoryMemoryError(ValueError):
     """Base error for memory, configuration, and story-contract failures."""
 
 
-# Describe why seed memory or a proposed session delta is invalid.
+# MemoryValidationError: invalid seed memory or proposed delta.
 class MemoryValidationError(StoryMemoryError):
     """Raised when seed/session memory or a proposed memory delta is invalid."""
 
 
-# Identify missing API setup separately so the CLI can give actionable help.
+# ConfigurationError: missing or unsupported API setup.
 class ConfigurationError(StoryMemoryError):
     """Raised when required OpenAI configuration is absent."""
 
 
-# Identify invalid model output before applying any part of its memory delta.
+# GenerationError: invalid model output; apply no delta.
 class GenerationError(StoryMemoryError):
     """Raised when a response violates the story output contract."""
 
 
-# Detect completed sessions that should not receive another generation.
+# StoryAlreadyEndedError: reject further generation after ending.
 class StoryAlreadyEndedError(StoryMemoryError):
     """Raised when a completed session receives another generation."""
 
 
-# Reprompt after AI classifies a requested action as unrealistic.
+# UnrealisticDecisionError: reprompt after AI realism rejection.
 class UnrealisticDecisionError(StoryMemoryError):
     """Raised when an AI-reviewed user decision does not fit the realistic story."""
 
 
-# Confirm the active interpreter uses the SDK range tested by this application.
+# SDK compatibility: require tested OpenAI package range.
 def validate_openai_sdk_version() -> str:
+    """Require the tested SDK range before starting any API-backed workflow."""
     try:
         installed_version = version("openai")
         sdk_major_text, sdk_minor_text = installed_version.split(".")[:2]
@@ -286,8 +306,12 @@ def validate_openai_sdk_version() -> str:
     return installed_version
 
 
-# Verify the certificate bundle and detect the optional HTTPX2 transport import.
+# TLS preflight: verify certifi bundle and optional HTTPX2 import.
 def verify_tls_imports() -> tuple[str, str | None]:
+    """Check CA bundle before network use and report optional httpx2 availability.
+
+    Return certifi path and HTTPX2 version; raise setup error when TLS data fails.
+    """
     try:
         import certifi
 
@@ -308,8 +332,9 @@ def verify_tls_imports() -> tuple[str, str | None]:
     return str(certificate_bundle), httpx2_version
 
 
-# Create the shared API client with StoryEngine's bounded timeout and retry settings.
+# API client: apply configured timeout and retry bounds.
 def create_openai_client(openai_api_key: str) -> OpenAI:
+    """Build shared Responses API client with bounded timeout and retries."""
     return OpenAI(
         api_key=openai_api_key,
         timeout=API_TIMEOUT_SECONDS,
@@ -317,8 +342,9 @@ def create_openai_client(openai_api_key: str) -> OpenAI:
     )
 
 
-# Read the remaining exposure count from canonical state or initial story rules.
+# Camera state: read remaining exposures or seed default.
 def remaining_photo_count(session_memory: StoryMemory) -> int:
+    """Read remaining camera exposures, defaulting to seed count when unset."""
     stored_photo_description = session_memory.state.get(PHOTO_COUNT_KEY)
     if stored_photo_description is None:
         return INITIAL_PHOTO_COUNT
@@ -340,8 +366,9 @@ def remaining_photo_count(session_memory: StoryMemory) -> int:
     raise MemoryValidationError(ERROR_PHOTO_COUNT_INVALID)
 
 
-# Validate every canonical key and value after loading or before a session update.
+# Canon validation: keys, values, events, step, camera counter.
 def validate_memory(story_memory: StoryMemory) -> None:
+    """Validate schema-level keys, values, events, step, and camera counter."""
     if story_memory.step < 0:
         raise MemoryValidationError(ERROR_MEMORY_STEP_NEGATIVE)
 
@@ -365,8 +392,12 @@ def validate_memory(story_memory: StoryMemory) -> None:
     remaining_photo_count(story_memory)
 
 
-# Load and validate canonical memory, creating an empty in-memory value only when absent.
+# Seed loading: validate canonical memory; return empty RAM state when absent.
 def load_memory(memory_path: Path = MEMORY_PATH) -> StoryMemory:
+    """Load read-only seed canon into a fresh session-memory object.
+
+    Missing seed returns empty memory. This function never writes the file.
+    """
     if not memory_path.exists():
         return StoryMemory()
 
@@ -382,8 +413,9 @@ def load_memory(memory_path: Path = MEMORY_PATH) -> StoryMemory:
         raise MemoryValidationError(ERROR_MEMORY_LOAD_INVALID) from memory_load_error
 
 
-# Serialize all canonical memory so the model never needs retrieval or truncation.
+# Model context: serialize complete canon without retrieval or truncation.
 def format_memory(story_memory: StoryMemory) -> str:
+    """Serialize the full canonical memory compactly for the Responses input."""
     validate_memory(story_memory)
     return json.dumps(
         story_memory.model_dump(mode="json"),
@@ -392,25 +424,28 @@ def format_memory(story_memory: StoryMemory) -> str:
     )
 
 
-# Enforce the hard context limit without truncating canon.
+# Context limit: reject oversized canon; never truncate.
 def validate_memory_size(story_memory: StoryMemory) -> None:
+    """Reject oversized canon rather than silently truncating or summarizing it."""
     if len(format_memory(story_memory)) > MAX_MEMORY_CHARS:
         raise MemoryValidationError(
             ERROR_MEMORY_TOO_LARGE_TEMPLATE.format(limit=MAX_MEMORY_CHARS)
         )
 
 
-# Collapse spacing and letter case for exact event duplicate checks.
+# Event normalization: case and whitespace for exact duplicate checks.
 def normalize(event_text: str) -> str:
+    """Normalize case and whitespace for exact event duplicate suppression."""
     return " ".join(event_text.casefold().split())
 
-# Validate memory keys, mutation limits, canon protection, and thread targets together.
+# Delta validation: keys, mutation limits, retcons, and thread targets.
 def validate_delta(
     story_memory: StoryMemory,
     memory_delta: MemoryDelta,
     *,
     allow_retcon: bool = False,
 ) -> None:
+    """Check all proposed memory operations before any session state is changed."""
     operation_count = (
         len(memory_delta.set)
         + len(memory_delta.events)
@@ -465,13 +500,17 @@ def validate_delta(
             raise MemoryValidationError(ERROR_THREAD_SET_AND_RESOLVE)
 
 
-# Apply a fully validated delta to a copy, preserving the original on every failure.
+# Delta application: validate, update copy, preserve original on failure.
 def apply_delta(
     session_memory: StoryMemory,
     memory_delta: MemoryDelta,
     *,
     allow_retcon: bool = False,
 ) -> StoryMemory:
+    """Apply a validated batch to a deep copy and return new session state.
+
+    Original memory stays unchanged on failure. Successful updates increment step.
+    """
     updated_memory = session_memory.model_copy(deep=True)
     validate_delta(updated_memory, memory_delta, allow_retcon=allow_retcon)
 
@@ -504,13 +543,14 @@ def apply_delta(
     return updated_memory
 
 
-# Build instructions from readable module-level rules and current decision context.
+# Instruction assembly: fixed rules plus current decision context.
 def build_instructions(
     *,
     decision_number: int,
     decision_limit_reached: bool,
     allow_retcon: bool,
 ) -> str:
+    """Combine fixed story rules with current decision limit and retcon context."""
     decision_limit_rule = (
         DECISION_LIMIT_INSTRUCTIONS
         if decision_limit_reached
@@ -542,13 +582,14 @@ def build_instructions(
     )
 
 
-# Trust AI's semantic self-checks; enforce only structured and session-state invariants.
+# Output validation: trust AI semantics; enforce schema and session invariants.
 def validate_generation_result(
     generation_result: GenerationResult,
     *,
     decision_limit_reached: bool,
     session_memory: StoryMemory,
 ) -> None:
+    """Trust AI semantic checks while enforcing types, state bounds, and counters."""
     if (
         not generation_result.decision_is_realistic
         and not generation_result.end_request_detected
@@ -574,8 +615,9 @@ def validate_generation_result(
         raise GenerationError(ERROR_MODEL_PHOTO_COUNTER)
 
 
-# Create a separated JSON payload so user text never becomes developer instructions.
+# Input payload: separate user text and canon from fixed instructions.
 def build_input(session_memory: StoryMemory, user_answer: str) -> str:
+    """Encode canon and one answer as JSON data separate from fixed instructions."""
     return json.dumps(
         {
             INPUT_STORY_MEMORY_KEY: session_memory.model_dump(mode="json"),
@@ -585,7 +627,7 @@ def build_input(session_memory: StoryMemory, user_answer: str) -> str:
     )
 
 
-# Generate one chapter and return updated memory held only for the current session.
+# Chapter generation: return validated prose and temporary session memory.
 def generate_story(
     user_answer: str,
     session_memory: StoryMemory,
@@ -593,6 +635,11 @@ def generate_story(
     allow_retcon: bool = False,
     decision_limit_reached: bool = False,
 ) -> tuple[str, StoryMemory]:
+    """Request one chapter and return validated prose with temporary session memory.
+
+    Validate input, API output, ending, and complete memory delta before returning.
+    Failures leave caller-owned memory unchanged; no generated state reaches disk.
+    """
     if not user_answer.strip():
         raise StoryMemoryError(ERROR_EMPTY_ANSWER)
     if len(user_answer) > MAX_USER_ANSWER_CHARS:
@@ -612,7 +659,7 @@ def generate_story(
         validate_openai_sdk_version()
 
         try:
-            # Initialize a bounded client so transient failures cannot retry forever.
+            # Client setup: bound retries and transient failure time.
             openai_client = create_openai_client(openai_api_key)
             api_response = openai_client.responses.parse(
                 model=MODEL,

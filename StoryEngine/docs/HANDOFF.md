@@ -18,24 +18,28 @@ Release acceptance:
 
 Supported baseline: Python 3.10 or newer. Dependencies are `openai>=2.54,<3` and `pydantic>=2,<3`; all other runtime modules are from Python's standard library. The application checks that the active interpreter has an OpenAI SDK version in this range before starting the story. The SDK major-version cap keeps the app on its standard HTTPX transport. The installed 3.11.0 SDK uses HTTPX2 and, in this Python 3.14 environment, raised `RecursionError: maximum recursion depth exceeded` while establishing a connection; SDK 2.54.0 completed live API requests.
 
-Create `.venv` with `py -m venv .venv` on Windows or `python3 -m venv .venv` on macOS. Install with `.venv\Scripts\python.exe -m pip install -r requirements.txt` on Windows or `.venv/bin/python -m pip install -r requirements.txt` on macOS. Set `OPENAI_API_KEY` in the current terminal and run `storyengine.py` or `testAPI.py` with that virtual environment's interpreter. The key must never be written to project files or printed by either program.
+Create `.venv` with `py -m venv .venv` on Windows or `python3 -m venv .venv` on macOS. Install with `.venv\Scripts\python.exe -m pip install -r requirements.txt` on Windows or `.venv/bin/python -m pip install -r requirements.txt` on macOS. Set `OPENAI_API_KEY` in the current terminal and run `storyengine.py` or `python -m tests.testAPI` with that virtual environment's interpreter. The key must never be written to project files or printed by either program.
 
 Run offline tests with `.venv\Scripts\python.exe -m unittest discover -s tests -v` on Windows or `.venv/bin/python -m unittest discover -s tests -v` on macOS. Use that same virtual-environment interpreter to run StoryEngine; a global interpreter with an unsupported SDK now fails early with setup instructions.
 
 ## Files and ownership
 
-- `storyengine.py`: CLI interaction, input validation, direct prompt-injection screening, ending decision, and process exit behavior.
-- `testAPI.py`: verifies `certifi` and optional `httpx2` imports, then sends one short Responses API request to check credentials, connectivity, and model access without starting a story.
+- `storyengine.py`: CLI interaction, input validation, direct prompt-injection screening, decision-limit flag, and process exit behavior.
+- `tests/testAPI.py`: verifies `certifi` and optional `httpx2` imports, then sends one short Responses API request to check credentials, connectivity, and model access without starting a story.
 - `story_memory.py`: Pydantic types, read-only seed loading, in-memory delta validation/application, Responses API call, and output-contract validation.
 - `story_memory.json`: human-readable starting canon, loaded read-only for each new process.
 - `opening.txt`: immutable opening displayed on first run.
-- `worldview.md`: human-readable story context for maintainers; runtime uses canonical JSON memory.
-- `tests/`: standard-library unit tests. Tests use temporary files and mocked API clients; they do not make API calls or edit the supplied memory file. `testAPI.py` is the explicit live connectivity check. StoryEngine startup and `testAPI.py` both verify the CA bundle and attempt the optional `httpx2` import; the supported SDK 2.x transport uses `httpx`.
-- `README.md` and `requirements.txt`: user setup and dependency bounds.
+- `docs/worldview.md`: human-readable story context for maintainers; runtime uses canonical JSON memory.
+- `docs/storyengine-information-flow.md` and `docs/storyengine-information-flow.png`: maintained technical flowchart and generated paper-style figure.
+- `tests/`: standard-library unit tests plus `testAPI.py`. Unit tests use temporary files and mocked API clients; they do not make API calls or edit the supplied memory file. StoryEngine startup and `testAPI.py` both verify the CA bundle and attempt the optional `httpx2` import; the supported SDK 2.x transport uses `httpx`.
+- `docs/README.md` and `requirements.txt`: user setup and dependency bounds.
+- `docs/storyengine-information-flow.md`: technical flowchart separating AI decisions from Python validation and temporary session state.
 
 StoryEngine intentionally uses no database, retrieval layer, model tools, multi-agent flow, server-side conversation state, persistent user decisions, or full story transcript. `story_memory.json` is a read-only seed; generated deltas update a `StoryMemory` object in RAM and disappear when the process exits. `story_memory.py` keeps memory logic in one module; `storyengine.py` owns the CLI.
 
 ## Runtime flow
+
+See [StoryEngine information flow](storyengine-information-flow.md) for an at-a-glance request path, API settings, validation boundary, and session reset behavior. The generated figure is [storyengine-information-flow.png](storyengine-information-flow.png).
 
 1. Parse standard `--help`; load and validate read-only `story_memory.json` as session seed.
 2. Print `opening.txt` without rewriting it. Each app launch starts from read-only seed canon, not the previous process's decisions.
@@ -100,7 +104,7 @@ Documented source guidance is distinct from StoryEngine choices: 90 seconds, two
 Verified in this Windows workspace with Python 3.14.7:
 
 - `python -m unittest discover -s tests -v`: 58 tests passed with global OpenAI SDK 3.11.0 and project virtual-environment SDK 2.54.0. The incompatible-SDK tests verify a clear startup failure before story input or client construction, with session memory unchanged. TLS tests cover a valid CA bundle and optional `httpx2` both present and absent.
-- `.venv\Scripts\python.exe testAPI.py`: live connectivity check succeeded with OpenAI SDK 2.54.0, ran `certifi` and optional `httpx2` import checks, and returned a Responses API request ID. The key and response text were not printed.
+- `.venv\Scripts\python.exe -m tests.testAPI`: live connectivity check succeeded with OpenAI SDK 2.54.0, ran `certifi` and optional `httpx2` import checks, and returned a Responses API request ID. The key and response text were not printed.
 - Live Responses API session test using SDK 2.54.0 and high reasoning: AI rejected a fantastical action without changing session state, then recognized an explicit end request, returned an accepted final chapter, honored one requested photo, recorded `leave_valley`, and reduced exposures from five to four. Seed file stayed byte-identical. Both live calls passed the model-reported story checks.
 - Running the original global SDK 3.11.0 live call reproduced `APIConnectionError` caused by `RecursionError: maximum recursion depth exceeded`. StoryEngine now rejects unsupported SDK versions before story input and reports the documented virtual-environment setup command; the project `.venv` uses SDK 2.54.0 and its live CLI run passed.
 - `python storyengine.py --help` displayed standard help. Empty-input CLI smoke test printed the unchanged opening, reprompted after blank input, and exited cleanly on EOF.
