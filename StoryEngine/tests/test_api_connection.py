@@ -11,8 +11,8 @@ from unittest.mock import Mock, patch
 
 from openai import APIConnectionError
 
-import testAPI
-from story_memory import ConfigurationError
+import StoryEngine.tests.testAPI as testAPI
+from story_memory import ConfigurationError, REASONING_EFFORT
 
 
 # Verify success, missing setup, incompatible SDK, and sanitized API failures.
@@ -24,75 +24,75 @@ class ApiConnectionTests(unittest.TestCase):
 
     # A valid response reports success and request ID without printing response text.
     def test_successful_response(self) -> None:
-        client = Mock()
-        client.responses.create.return_value = SimpleNamespace(
+        mocked_openai_client = Mock()
+        mocked_openai_client.responses.create.return_value = SimpleNamespace(
             id="resp_connection_test",
             _request_id="req_connection_test",
         )
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch.object(
-            testAPI, "verify_tls_imports", return_value=("cacert.pem", None)
-        ) as tls_verification, patch.object(testAPI, "validate_openai_sdk_version", return_value="2.54.0"
-        ), patch.object(testAPI, "OpenAI", return_value=client) as openai_constructor, contextlib.redirect_stdout(
+            testAPI.story_memory, "verify_tls_imports", return_value=("cacert.pem", None)
+        ) as tls_import_verifier, patch.object(testAPI.story_memory, "validate_openai_sdk_version", return_value="2.54.0"
+        ), patch.object(testAPI.story_memory, "create_openai_client", return_value=mocked_openai_client) as openai_client_factory, contextlib.redirect_stdout(
             self.output
         ), contextlib.redirect_stderr(self.errors):
-            status = testAPI.check_api_connection()
+            status = testAPI.main([])
 
         self.assertEqual(status, 0)
         self.assertIn("connection succeeded", self.output.getvalue())
-        self.assertIn("certifi bundle found", self.output.getvalue())
-        self.assertIn("httpx2 not installed (not required", self.output.getvalue())
+        self.assertIn("TLS imports verified", self.output.getvalue())
         self.assertIn("req_connection_test", self.output.getvalue())
         self.assertNotIn("test-key", self.output.getvalue())
         self.assertEqual(self.errors.getvalue(), "")
-        call = client.responses.create.call_args.kwargs
-        self.assertEqual(call["model"], "gpt-5.6-luna")
-        self.assertFalse(call["store"])
-        self.assertNotIn("tools", call)
-        openai_constructor.assert_called_once()
-        tls_verification.assert_called_once()
+        api_request_parameters = mocked_openai_client.responses.create.call_args.kwargs
+        self.assertEqual(api_request_parameters["model"], "gpt-5.6-luna")
+        self.assertEqual(api_request_parameters["reasoning"], {"effort": REASONING_EFFORT})
+        self.assertFalse(api_request_parameters["store"])
+        self.assertNotIn("tools", api_request_parameters)
+        openai_client_factory.assert_called_once_with("test-key")
+        tls_import_verifier.assert_called_once()
 
     # Missing credentials fail before constructing the network client.
     def test_missing_api_key(self) -> None:
-        with patch.dict(os.environ, {}, clear=True), patch.object(testAPI, "OpenAI") as client, contextlib.redirect_stderr(
+        with patch.dict(os.environ, {}, clear=True), patch.object(testAPI.story_memory, "create_openai_client") as openai_client_factory, contextlib.redirect_stderr(
             self.errors
         ):
-            status = testAPI.check_api_connection()
+            status = testAPI.main([])
 
         self.assertEqual(status, 2)
-        self.assertIn("OPENAI_API_KEY is not set", self.errors.getvalue())
-        client.assert_not_called()
+        self.assertIn("OPENAI_API_KEY is missing", self.errors.getvalue())
+        openai_client_factory.assert_not_called()
 
     # Unsupported SDK setup fails before any network request.
     def test_unsupported_sdk_version(self) -> None:
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch.object(
-            testAPI,
+            testAPI.story_memory,
             "validate_openai_sdk_version",
             side_effect=ConfigurationError("OpenAI SDK 3.11.0 is unsupported."),
-        ), patch.object(testAPI, "verify_tls_imports", return_value=("cacert.pem", "2.12.0")), patch.object(
-            testAPI, "OpenAI"
-        ) as client, contextlib.redirect_stderr(self.errors):
-            status = testAPI.check_api_connection()
+        ), patch.object(testAPI.story_memory, "verify_tls_imports", return_value=("cacert.pem", "2.12.0")), patch.object(
+            testAPI.story_memory, "create_openai_client"
+        ) as openai_client_factory, contextlib.redirect_stderr(self.errors):
+            status = testAPI.main([])
 
         self.assertEqual(status, 2)
         self.assertIn("SDK 3.11.0 is unsupported", self.errors.getvalue())
-        client.assert_not_called()
+        openai_client_factory.assert_not_called()
 
     # Network errors show a concise diagnosis and never expose exception payloads.
     def test_connection_error_is_sanitized(self) -> None:
-        client = Mock()
-        client.responses.create.side_effect = APIConnectionError(
+        mocked_openai_client = Mock()
+        mocked_openai_client.responses.create.side_effect = APIConnectionError(
             message="Connection error containing sk-secret.",
             request=None,
         )
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch.object(
-            testAPI, "validate_openai_sdk_version", return_value="2.54.0"
-        ), patch.object(testAPI, "verify_tls_imports", return_value=("cacert.pem", None)), patch.object(
-            testAPI, "OpenAI", return_value=client
+            testAPI.story_memory, "validate_openai_sdk_version", return_value="2.54.0"
+        ), patch.object(testAPI.story_memory, "verify_tls_imports", return_value=("cacert.pem", None)), patch.object(
+            testAPI.story_memory, "create_openai_client", return_value=mocked_openai_client
         ), contextlib.redirect_stdout(self.output), contextlib.redirect_stderr(self.errors):
-            status = testAPI.check_api_connection()
+            status = testAPI.main([])
 
         self.assertEqual(status, 1)
-        self.assertIn("network, proxy, TLS, or firewall", self.errors.getvalue())
+        self.assertIn("APIConnectionError", self.errors.getvalue())
         self.assertNotIn("sk-secret", self.errors.getvalue())
         self.assertNotIn("test-key", self.errors.getvalue())
 
@@ -103,9 +103,10 @@ class ApiConnectionTests(unittest.TestCase):
                 testAPI.main(["--help"])
 
         self.assertEqual(raised.exception.code, 0)
-        self.assertIn("OpenAI Responses API", self.output.getvalue())
+        self.assertIn("--help", self.output.getvalue())
 
 
 # Allow this file to run as a focused test module.
 if __name__ == "__main__":
     unittest.main()
+

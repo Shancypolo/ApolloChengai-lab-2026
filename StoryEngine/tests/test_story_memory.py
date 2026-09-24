@@ -16,15 +16,22 @@ from openai import APIConnectionError
 from story_memory import (
     API_MAX_RETRIES,
     API_TIMEOUT_SECONDS,
+    MAX_STORY_DECISIONS,
+    MIN_STORY_DECISIONS,
+    MIN_STORY_SENTENCES,
+    MAX_STORY_SENTENCES,
     MAX_MEMORY_CHARS,
     MAX_MEMORY_OPERATIONS,
     MAX_NEW_EVENTS,
     PROMPT_CACHE_KEY,
     MODEL,
+    REASONING_EFFORT,
+    ENDING_KEY,
     PHOTO_COUNT_KEY,
     ConfigurationError,
     GenerationError,
     GenerationResult,
+    UnrealisticDecisionError,
     MemoryDelta,
     MemorySet,
     MemoryValidationError,
@@ -33,13 +40,10 @@ from story_memory import (
     StoryAlreadyEndedError,
     apply_delta,
     build_instructions,
-    count_sentences,
-    explicit_photo_intent,
     format_memory,
     generate_story,
     load_memory,
     remaining_photo_count,
-    story_uses_photo_exposure,
     validate_memory_size,
     verify_tls_imports,
 )
@@ -52,8 +56,16 @@ def make_result(
     memory: MemoryDelta | None = None,
     ending: str = "none",
     photo_taken: bool = False,
+    decision_is_realistic: bool = True,
+    end_request_detected: bool = False,
+    sentence_count: int = 5,
+    story_contract_passed: bool = True,
 ) -> GenerationResult:
     return GenerationResult(
+        decision_is_realistic=decision_is_realistic,
+        end_request_detected=end_request_detected,
+        sentence_count=sentence_count,
+        story_contract_passed=story_contract_passed,
         story_text=story_text,
         memory=memory or MemoryDelta(),
         ending=ending,
@@ -252,10 +264,6 @@ class MemoryDeltaTests(unittest.TestCase):
             apply_delta(memory, delta)
         self.assertEqual(memory.model_dump(), before)
 
-    # Sentence counting handles quotes, decimals, and common abbreviations.
-    def test_sentence_count(self) -> None:
-        self.assertEqual(count_sentences('Dr. Vale held 3.5 photographs. "Wait!" he wrote.'), 2)
-
     # Compact serialization remains below the configured memory limit for seeded canon.
     def test_format_memory_is_compact(self) -> None:
         formatted = format_memory(StoryMemory(facts={"world.place": "A valley."}))
@@ -282,9 +290,9 @@ class MemoryDeltaTests(unittest.TestCase):
             validate_memory_size(oversized)
 
 
-# Test the one-call API boundary with temporary in-memory story sessions.
+# Test structured AI decisions, API settings, and session-only updates.
 class GenerationTests(unittest.TestCase):
-    # Create a private seed path and realistic chapter examples for generation tests.
+    # Prepare a five-sentence realistic chapter and isolate seed-file behavior.
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary_directory.cleanup)
@@ -298,19 +306,32 @@ class GenerationTests(unittest.TestCase):
             "and something answered beneath the bridge."
         )
 
-    # Keep fixed instructions aligned with story, realism, and security contracts.
+    # The prompt asks AI to assess realism, end intent, photography, and its own contract.
     def test_generation_instruction_contract(self) -> None:
-        ongoing = build_instructions(allow_retcon=False, final_generation=False).casefold()
-        final = build_instructions(allow_retcon=False, final_generation=True).casefold()
+        ongoing = build_instructions(
+            allow_retcon=False,
+            decision_number=1,
+            decision_limit_reached=False,
+        ).casefold()
+        at_limit = build_instructions(
+            allow_retcon=False,
+            decision_number=MAX_STORY_DECISIONS,
+            decision_limit_reached=True,
+        ).casefold()
+        self.assertIn("decision_is_realistic", ongoing)
+        self.assertIn("detect whether user explicitly wants the story to end", ongoing)
+        self.assertIn(f"before decision {MIN_STORY_DECISIONS}", ongoing)
+        self.assertIn("photo_taken", ongoing)
+        self.assertIn("sentence_count", ongoing)
+        self.assertIn("story_contract_passed", ongoing)
+        self.assertIn("4 to 9 english sentences", ongoing)
         self.assertIn("unresolved cliffhanger", ongoing)
-        self.assertIn("exactly 4 to 9", ongoing)
-        self.assertIn("physically possible", ongoing)
-        self.assertIn("folklore may", ongoing)
-        self.assertIn("do not use or request tools", ongoing)
-        self.assertIn("leaving the valley", final)
+        self.assertIn("final sentence", ongoing)
+        self.assertIn("no fixed outcome", ongoing)
+        self.assertIn("must be final", at_limit)
         self.assertNotIn("ray bradbury", ongoing)
 
-    # A normal response uses required API settings and returns updated session memory.
+    # A normal response uses high reasoning and returns updated in-memory canon.
     def test_generate_story_api_contract_and_session_memory(self) -> None:
         session_memory = StoryMemory()
         parsed_result = make_result(
@@ -337,16 +358,261 @@ class GenerationTests(unittest.TestCase):
         )
         call = client.responses.parse.call_args.kwargs
         self.assertEqual(call["model"], MODEL)
-        self.assertEqual(call["reasoning"], {"effort": "medium"})
+        self.assertEqual(call["reasoning"], {"effort": REASONING_EFFORT})
         self.assertEqual(call["text"], {"verbosity": "low"})
         self.assertFalse(call["store"])
         self.assertEqual(call["prompt_cache_key"], PROMPT_CACHE_KEY)
         self.assertNotIn("tools", call)
-        self.assertIn("instructions", call)
+        self.assertIn("decision_is_realistic", call["instructions"])
         self.assertEqual(json.loads(call["input"])["user_decision"], "He walks to the bridge.")
         self.assertEqual(session_memory.step, 0)
         self.assertEqual(next_session_memory.step, 1)
         self.assertIn("He reached the old bridge.", next_session_memory.events)
+
+    # AI rejection reprompts without applying model-proposed story changes.
+    def test_ai_rejects_unrealistic_decision_without_memory_change(self) -> None:
+        session_memory = StoryMemory(step=2)
+        original = session_memory.model_dump()
+        rejected_result = make_result(
+            "",
+            memory=MemoryDelta(events=["He teleported to the coast."]),
+            decision_is_realistic=False,
+            sentence_count=0,
+            story_contract_passed=False,
+        )
+        client = Mock()
+        client.responses.parse.return_value = SimpleNamespace(output_parsed=rejected_result)
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "story_memory.OpenAI", return_value=client
+        ):
+            with self.assertRaises(UnrealisticDecisionError):
+                generate_story("He teleports to the coast.", session_memory)
+
+        client.responses.parse.assert_called_once()
+        self.assertEqual(session_memory.model_dump(), original)
+
+    # AI-reported self-check failure rejects output before session memory changes.
+    def test_story_contract_self_check_failure_preserves_memory(self) -> None:
+        session_memory = StoryMemory(step=1)
+        original = session_memory.model_dump()
+        client = Mock()
+        client.responses.parse.return_value = SimpleNamespace(
+            output_parsed=make_result(self.chapter, story_contract_passed=False)
+        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "story_memory.OpenAI", return_value=client
+        ):
+            with self.assertRaisesRegex(GenerationError, "contract check failed"):
+                generate_story("He studies the river.", session_memory)
+        self.assertEqual(session_memory.model_dump(), original)
+
+    # AI-reported sentence count is checked as a structured result, not recounted in Python.
+    def test_ai_sentence_count_outside_limit_is_rejected(self) -> None:
+        client = Mock()
+        client.responses.parse.return_value = SimpleNamespace(
+            output_parsed=make_result(self.chapter, sentence_count=3)
+        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "story_memory.OpenAI", return_value=client
+        ):
+            with self.assertRaisesRegex(GenerationError, "sentence count"):
+                generate_story("He studies the river.", StoryMemory())
+
+    # AI end-request classification makes next generation final without local phrase parsing.
+    def test_ai_end_request_makes_next_generation_final(self) -> None:
+        final_text = (
+            "He walked to the ridge. The river moved below the road. "
+            "He carried the camera toward the coast. The valley faded behind him. "
+            "At sunset, he had left the valley for good."
+        )
+        client = Mock()
+        client.responses.parse.return_value = SimpleNamespace(
+            output_parsed=make_result(
+                final_text,
+                ending="leave_valley",
+                end_request_detected=True,
+            )
+        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "story_memory.OpenAI", return_value=client
+        ):
+            _, updated_memory = generate_story("Please finish this story now.", StoryMemory())
+        self.assertEqual(updated_memory.state[ENDING_KEY], "leave_valley")
+        self.assertEqual(updated_memory.step, 1)
+
+    # The ninth accepted decision is final even when AI detects no early end request.
+    def test_decision_limit_makes_generation_final(self) -> None:
+        session_memory = StoryMemory(step=MAX_STORY_DECISIONS - 1)
+        client = Mock()
+        client.responses.parse.return_value = SimpleNamespace(
+            output_parsed=make_result(
+                "He reached the ridge. Clouds gathered above the river. "
+                "He walked toward the road. A truck waited near the bridge. "
+                "He left the valley before the rain began.",
+                ending="leave_valley",
+            )
+        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "story_memory.OpenAI", return_value=client
+        ):
+            _, updated_memory = generate_story(
+                "He walks toward the waiting truck.",
+                session_memory,
+                decision_limit_reached=True,
+            )
+        self.assertEqual(updated_memory.state[ENDING_KEY], "leave_valley")
+        self.assertEqual(updated_memory.step, MAX_STORY_DECISIONS)
+
+    # AI end detection and outcome label must agree with application decision limit.
+    def test_inconsistent_ai_end_decision_is_rejected(self) -> None:
+        session_memory = StoryMemory(step=4)
+        original = session_memory.model_dump()
+        client = Mock()
+        client.responses.parse.return_value = SimpleNamespace(
+            output_parsed=make_result(self.chapter, ending="leave_valley")
+        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "story_memory.OpenAI", return_value=client
+        ):
+            with self.assertRaisesRegex(GenerationError, "terminal outcome"):
+                generate_story("He walks to the bridge.", session_memory)
+        self.assertEqual(session_memory.model_dump(), original)
+
+    # A final drowning outcome is recorded only in returned session memory.
+    def test_final_drowning_ending(self) -> None:
+        final_text = (
+            "He stepped into the river at the bend. The current closed over the camera strap. "
+            "No cry crossed the still valley. By morning, the river had carried him onward, "
+            "and he had drowned without a sound."
+        )
+        session_memory = StoryMemory()
+        client = Mock()
+        client.responses.parse.return_value = SimpleNamespace(
+            output_parsed=make_result(
+                final_text,
+                ending="drowning",
+                end_request_detected=True,
+            )
+        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "story_memory.OpenAI", return_value=client
+        ):
+            _, updated_memory = generate_story("End the story.", session_memory)
+        self.assertEqual(updated_memory.state[ENDING_KEY], "drowning")
+        self.assertIsNone(session_memory.state.get(ENDING_KEY))
+        self.assertEqual(updated_memory.step, 1)
+
+    # A final departure from the valley is also a permitted terminal outcome.
+    def test_final_leaving_valley_ending(self) -> None:
+        final_text = (
+            "He took the ridge road beyond the last empty house. The valley narrowed behind him. "
+            "He carried the camera and the sound of the church bell toward the coast. "
+            "At sunset, he had left the valley for good."
+        )
+        client = Mock()
+        client.responses.parse.return_value = SimpleNamespace(
+            output_parsed=make_result(
+                final_text,
+                ending="leave_valley",
+                end_request_detected=True,
+            )
+        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "story_memory.OpenAI", return_value=client
+        ):
+            _, updated_memory = generate_story("End the story.", StoryMemory())
+        self.assertEqual(updated_memory.state[ENDING_KEY], "leave_valley")
+
+    # A valid AI photo decision decrements exactly one session exposure.
+    def test_photo_decision_decrements_remaining_count(self) -> None:
+        session_memory = StoryMemory(state={PHOTO_COUNT_KEY: "Five photographs remain."})
+        photo_text = (
+            "He lifted the old camera. He took a photograph of the bridge. "
+            "The shutter clicked once in the quiet valley. A loose board shifted under his hand. "
+            "He looked toward the road."
+        )
+        client = Mock()
+        client.responses.parse.return_value = SimpleNamespace(
+            output_parsed=make_result(photo_text, photo_taken=True)
+        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "story_memory.OpenAI", return_value=client
+        ):
+            _, next_session_memory = generate_story(
+                "He looks over the bridge and considers a photograph.", session_memory
+            )
+        self.assertEqual(remaining_photo_count(session_memory), 5)
+        self.assertEqual(remaining_photo_count(next_session_memory), 4)
+
+    # AI cannot overwrite the exposure counter that Python owns.
+    def test_reject_model_photo_count_mutation(self) -> None:
+        session_memory = StoryMemory()
+        original = session_memory.model_dump()
+        client = Mock()
+        client.responses.parse.return_value = SimpleNamespace(
+            output_parsed=make_result(
+                self.chapter,
+                memory=MemoryDelta(
+                    set=[MemorySet(section="state", key=PHOTO_COUNT_KEY, value="Four photographs remain.")]
+                ),
+            )
+        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "story_memory.OpenAI", return_value=client
+        ):
+            with self.assertRaisesRegex(GenerationError, "application owns"):
+                generate_story("He examines the station timetable.", session_memory)
+        self.assertEqual(session_memory.model_dump(), original)
+
+    # A photo cannot be taken after all session exposures are spent.
+    def test_reject_photo_after_exposures_spent(self) -> None:
+        session_memory = StoryMemory(state={PHOTO_COUNT_KEY: "Zero exposures remain."})
+        original = session_memory.model_dump()
+        client = Mock()
+        client.responses.parse.return_value = SimpleNamespace(
+            output_parsed=make_result(self.chapter, photo_taken=True)
+        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "story_memory.OpenAI", return_value=client
+        ):
+            with self.assertRaises(GenerationError):
+                generate_story("Photograph the church.", session_memory)
+        self.assertEqual(session_memory.model_dump(), original)
+
+    # API errors leave caller-owned session memory unchanged.
+    def test_api_failure_preserves_session_memory(self) -> None:
+        session_memory = StoryMemory(step=2)
+        original = session_memory.model_dump()
+        client = Mock()
+        client.responses.parse.side_effect = APIConnectionError(
+            message="Connection error.",
+            request=None,
+        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
+            "story_memory.OpenAI", return_value=client
+        ):
+            with self.assertRaisesRegex(GenerationError, "Could not connect"):
+                generate_story("He returns to town.", session_memory)
+        self.assertEqual(session_memory.model_dump(), original)
+
+    # Missing credentials fail before the API client is constructed.
+    def test_missing_api_key(self) -> None:
+        with patch.dict(os.environ, {}, clear=True), patch("story_memory.OpenAI") as client:
+            with self.assertRaises(ConfigurationError):
+                generate_story("He walks to the church.", StoryMemory())
+        client.assert_not_called()
+
+    # An unsupported SDK fails with setup guidance before constructing the API client.
+    def test_unsupported_openai_sdk_version_fails_before_api(self) -> None:
+        session_memory = StoryMemory()
+        original = session_memory.model_dump()
+        with patch("story_memory.version", return_value="3.11.0"), patch.dict(
+            os.environ, {"OPENAI_API_KEY": "test-key"}
+        ), patch("story_memory.OpenAI") as client:
+            with self.assertRaisesRegex(ConfigurationError, "requires openai>=2.54,<3"):
+                generate_story("He studies the station timetable.", session_memory)
+        client.assert_not_called()
+        self.assertEqual(session_memory.model_dump(), original)
 
     # Generated session changes never rewrite the on-disk seed or survive a reload.
     def test_session_memory_resets_to_read_only_seed(self) -> None:
@@ -368,51 +634,13 @@ class GenerationTests(unittest.TestCase):
         self.assertEqual(self.seed_path.read_bytes(), original_bytes)
         self.assertEqual(load_memory(self.seed_path), seed)
 
-    # Missing credentials fail before the API client is constructed.
-    def test_missing_api_key(self) -> None:
-        with patch.dict(os.environ, {}, clear=True), patch("story_memory.OpenAI") as client:
-            with self.assertRaises(ConfigurationError):
-                generate_story("He walks to the church.", StoryMemory())
-        client.assert_not_called()
-
-    # An unsupported SDK fails with setup guidance before constructing the API client.
-    def test_unsupported_openai_sdk_version_fails_before_api(self) -> None:
-        session_memory = StoryMemory()
-        original = session_memory.model_dump()
-        with patch("story_memory.version", return_value="3.11.0"), patch.dict(
-            os.environ, {"OPENAI_API_KEY": "test-key"}
-        ), patch("story_memory.OpenAI") as client:
-            with self.assertRaisesRegex(ConfigurationError, "requires openai>=2.54,<3"):
-                generate_story("He studies the station timetable.", session_memory)
-        client.assert_not_called()
-        self.assertEqual(session_memory.model_dump(), original)
-
-    # API errors leave caller-owned session memory unchanged.
-    def test_api_failure_preserves_session_memory(self) -> None:
-        session_memory = StoryMemory(step=2)
-        original = session_memory.model_dump()
-        client = Mock()
-        client.responses.parse.side_effect = APIConnectionError(
-            message="Connection error.",
-            request=None,
-        )
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-            "story_memory.OpenAI", return_value=client
-        ):
-            with self.assertRaisesRegex(GenerationError, "Could not connect"):
-                generate_story("He returns to town.", session_memory)
-        self.assertEqual(session_memory.model_dump(), original)
-
-    # Invalid sentence counts and fantasy events do not update session memory.
-    def test_invalid_story_output_preserves_session_memory(self) -> None:
+    # API contract failures leave caller-owned memory unchanged.
+    def test_invalid_ai_contract_preserves_session_memory(self) -> None:
         session_memory = StoryMemory(step=1)
         original = session_memory.model_dump()
         invalid_results = (
-            make_result("Only three sentences. This is two. Done."),
-            make_result(
-                "He met a ghost in the schoolhouse. The bell rang once. "
-                "The river moved below. He walked toward the road."
-            ),
+            make_result(self.chapter, sentence_count=3),
+            make_result(self.chapter, story_contract_passed=False),
         )
         client = Mock()
         for result in invalid_results:
@@ -423,108 +651,6 @@ class GenerationTests(unittest.TestCase):
                 with self.assertRaises(GenerationError):
                     generate_story("He walks to the market.", session_memory)
             self.assertEqual(session_memory.model_dump(), original)
-
-    # A final drowning outcome is recorded only in returned session memory.
-    def test_final_drowning_ending(self) -> None:
-        final_text = (
-            "He stepped into the river at the bend. The current closed over the camera strap. "
-            "No cry crossed the still valley. By morning, the river had carried him onward, "
-            "and he had drowned without a sound."
-        )
-        session_memory = StoryMemory()
-        client = Mock()
-        client.responses.parse.return_value = SimpleNamespace(
-            output_parsed=make_result(final_text, ending="drowning")
-        )
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-            "story_memory.OpenAI", return_value=client
-        ):
-            _, updated_memory = generate_story(
-                "End the story.", session_memory, final_generation=True
-            )
-        self.assertEqual(updated_memory.state["story.ending"], "drowning")
-        self.assertEqual(session_memory.state.get("story.ending"), None)
-        self.assertEqual(updated_memory.step, 1)
-
-    # A final departure from the valley is also a permitted terminal outcome.
-    def test_final_leaving_valley_ending(self) -> None:
-        final_text = (
-            "He took the ridge road beyond the last empty house. The valley narrowed behind him. "
-            "He carried the camera and the sound of the church bell toward the coast. "
-            "At sunset, he had left the valley for good."
-        )
-        client = Mock()
-        client.responses.parse.return_value = SimpleNamespace(
-            output_parsed=make_result(final_text, ending="leave_valley")
-        )
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-            "story_memory.OpenAI", return_value=client
-        ):
-            _, updated_memory = generate_story(
-                "End the story.", StoryMemory(), final_generation=True
-            )
-        self.assertEqual(updated_memory.state["story.ending"], "leave_valley")
-
-    # A final label that disagrees with prose is rejected without changing input memory.
-    def test_final_outcome_mismatch_rejected(self) -> None:
-        session_memory = StoryMemory(step=4)
-        original = session_memory.model_dump()
-        client = Mock()
-        client.responses.parse.return_value = SimpleNamespace(
-            output_parsed=make_result(self.chapter, ending="leave_valley")
-        )
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-            "story_memory.OpenAI", return_value=client
-        ):
-            with self.assertRaises(GenerationError):
-                generate_story("End the story.", session_memory, final_generation=True)
-        self.assertEqual(session_memory.model_dump(), original)
-
-    # A valid camera exposure updates only the returned session object.
-    def test_photo_choice_decrements_remaining_count(self) -> None:
-        session_memory = StoryMemory(state={PHOTO_COUNT_KEY: "Five photographs remain."})
-        photo_text = (
-            "He lifted the old camera. He took a photograph of the bridge. "
-            "The shutter clicked once in the quiet valley. A loose board shifted under his hand."
-        )
-        client = Mock()
-        client.responses.parse.return_value = SimpleNamespace(
-            output_parsed=make_result(photo_text, photo_taken=True)
-        )
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-            "story_memory.OpenAI", return_value=client
-        ):
-            _, next_session_memory = generate_story(
-                "Yes, take a photograph of the bridge.", session_memory
-            )
-        self.assertEqual(remaining_photo_count(session_memory), 5)
-        self.assertEqual(remaining_photo_count(next_session_memory), 4)
-
-    # The model cannot mutate the photo count owned by the application.
-    def test_reject_model_photo_count_mutation(self) -> None:
-        session_memory = StoryMemory()
-        original = session_memory.model_dump()
-        client = Mock()
-        client.responses.parse.return_value = SimpleNamespace(
-            output_parsed=make_result(
-                self.chapter,
-                memory=MemoryDelta(
-                    set=[
-                        MemorySet(
-                            section="state",
-                            key=PHOTO_COUNT_KEY,
-                            value="Four photographs remain.",
-                        )
-                    ]
-                ),
-            )
-        )
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-            "story_memory.OpenAI", return_value=client
-        ):
-            with self.assertRaisesRegex(GenerationError, "application owns"):
-                generate_story("He examines the station timetable.", session_memory)
-        self.assertEqual(session_memory.model_dump(), original)
 
     # A delta that crosses the total memory limit is rejected before returning new state.
     def test_oversized_delta_preserves_session_memory(self) -> None:
@@ -544,73 +670,6 @@ class GenerationTests(unittest.TestCase):
                 generate_story("He sees the empty schoolhouse.", session_memory)
         self.assertEqual(session_memory.model_dump(), original)
 
-    # A photo cannot be taken after all session exposures are spent.
-    def test_reject_photo_after_exposures_spent(self) -> None:
-        session_memory = StoryMemory(state={PHOTO_COUNT_KEY: "Zero exposures remain."})
-        original = session_memory.model_dump()
-        client = Mock()
-        client.responses.parse.return_value = SimpleNamespace(
-            output_parsed=make_result(
-                "He took a photograph of the church. The bell rang over town. "
-                "Dust turned slowly in the light. A door opened down the street.",
-                photo_taken=True,
-            )
-        )
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-            "story_memory.OpenAI", return_value=client
-        ):
-            with self.assertRaises(GenerationError):
-                generate_story("Take a photograph of the church.", session_memory)
-        self.assertEqual(session_memory.model_dump(), original)
-
-    # A declined photo request cannot be overridden by model output.
-    def test_reject_photo_after_user_declines(self) -> None:
-        session_memory = StoryMemory()
-        client = Mock()
-        client.responses.parse.return_value = SimpleNamespace(
-            output_parsed=make_result(
-                "He took a photograph of the bridge. The river slid below him. "
-                "A bell rang once. Something moved inside the old toll house.",
-                photo_taken=True,
-            )
-        )
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-            "story_memory.OpenAI", return_value=client
-        ):
-            with self.assertRaises(GenerationError):
-                generate_story("No photograph today; keep the camera capped.", session_memory)
-        self.assertEqual(session_memory.step, 0)
-
-    # One story decision cannot spend several exposures at once.
-    def test_reject_multiple_photos_in_one_chapter(self) -> None:
-        client = Mock()
-        client.responses.parse.return_value = SimpleNamespace(
-            output_parsed=make_result(
-                "He took three photographs of the bridge. The river moved below him. "
-                "A bell rang once. Something shifted in the old toll house.",
-                photo_taken=True,
-            )
-        )
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-            "story_memory.OpenAI", return_value=client
-        ):
-            with self.assertRaises(GenerationError):
-                generate_story("Take all five photographs of the bridge.", StoryMemory())
-
-    # Photo intent recognizes direct answers without presenting response options.
-    def test_explicit_photo_intent(self) -> None:
-        self.assertIs(explicit_photo_intent("yes"), True)
-        self.assertIs(explicit_photo_intent("no"), False)
-        self.assertIs(explicit_photo_intent("Yes, take a photo of the bridge."), True)
-        self.assertIs(explicit_photo_intent("Frame the church."), True)
-        self.assertIs(explicit_photo_intent("No photograph today."), False)
-        self.assertIs(explicit_photo_intent("He doesn't take a photograph."), False)
-        self.assertIs(explicit_photo_intent("He won't take a photo."), False)
-        self.assertIsNone(explicit_photo_intent("He walks toward the market."))
-        self.assertTrue(story_uses_photo_exposure("He took a photograph of the bridge."))
-        self.assertFalse(story_uses_photo_exposure("He did not take a photograph."))
-        self.assertFalse(story_uses_photo_exposure("He didn't take a photograph."))
-
     # An oversized in-memory canon stops before any OpenAI request.
     def test_oversized_memory_stops_before_api(self) -> None:
         oversized = StoryMemory(events=["x" * 999 for _ in range(100)])
@@ -623,7 +682,7 @@ class GenerationTests(unittest.TestCase):
 
     # An ended in-session story cannot receive another generation.
     def test_completed_story_rejects_more_generation(self) -> None:
-        session_memory = StoryMemory(state={"story.ending": "leave_valley"})
+        session_memory = StoryMemory(state={ENDING_KEY: "leave_valley"})
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
             "story_memory.OpenAI"
         ) as client:
@@ -631,37 +690,7 @@ class GenerationTests(unittest.TestCase):
                 generate_story("Continue.", session_memory)
         client.assert_not_called()
 
-    # Implausible actions are rejected before reaching the API; folklore discussion remains allowed.
-    def test_realism_filter_blocks_fantasy_but_allows_folklore(self) -> None:
-        fantasy_decisions = (
-            "He meets a ghost at the bridge.",
-            "He casts a spell to stop the dam.",
-            "He teleports to the coast.",
-            "He walks on water to reach the church.",
-        )
-        for decision in fantasy_decisions:
-            client = Mock()
-            with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-                "story_memory.OpenAI", return_value=client
-            ), self.subTest(decision=decision):
-                with self.assertRaises(GenerationError):
-                    generate_story(decision, StoryMemory())
-            client.assert_not_called()
 
-        client = Mock()
-        client.responses.parse.return_value = SimpleNamespace(
-            output_parsed=make_result(
-                "He asks the priest about river-spirit stories. The priest folds his hands. "
-                "Outside, a truck grinds up the road. A church bell answers the noon radio.",
-            )
-        )
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), patch(
-            "story_memory.OpenAI", return_value=client
-        ):
-            _, updated_memory = generate_story(
-                "He asks the priest about river spirit legends.", StoryMemory()
-            )
-        self.assertEqual(updated_memory.step, 1)
 
 
 # Run this file directly for a focused local memory test suite.

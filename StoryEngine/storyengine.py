@@ -11,13 +11,17 @@ import unicodedata
 from pathlib import Path
 
 from story_memory import (
+    ENDING_KEY,
+    MAX_STORY_DECISIONS,
     MAX_USER_ANSWER_CHARS,
     MEMORY_PATH,
     ConfigurationError,
+    UnrealisticDecisionError,
     StoryAlreadyEndedError,
     StoryMemory,
     StoryMemoryError,
-    contains_fantastical_action,
+    ERROR_EMPTY_ANSWER,
+    ERROR_OVERSIZED_ANSWER,
     generate_story,
     load_memory,
     validate_openai_sdk_version,
@@ -25,15 +29,70 @@ from story_memory import (
 )
 
 
-# Keep the interaction and story limits visible to new contributors.
-MAX_STORY_DECISIONS = 9
+# CLI text and regular expressions used by parsing, prompts, and terminal output.
+CLI_PROGRAM_NAME = "storyengine"
+CLI_DESCRIPTION = "Continue the valley story with open-ended decisions."
+CLI_EPILOG_TEMPLATE = (
+    "Run with OPENAI_API_KEY set. Enter a free-text decision of up to {character_limit} characters."
+)
+CLI_ERROR_TEMPLATE = "Error: {message}"
+CLI_GENERATING_STATUS = "Generating next chapter…"
+CLI_COMPLETE_STATUS = "Story complete."
+CLI_ENDING_EXISTS = "This story has already ended."
+CLI_OPENING_READ_ERROR = "The starting story file could not be read."
+CLI_INTERRUPT_MESSAGE = "\nStory session interrupted; in-memory story state will be discarded."
+CLI_MALICIOUS_INPUT_ERROR = (
+    "StoryEngine stopped because input attempted to override safety rules or reveal hidden instructions."
+)
+CLI_NEWLINE = "\n"
+CLI_UTF8_ENCODING = "utf-8"
+CLI_REPLACE_ERRORS = "replace"
+CLI_ENCODING_SETTING = "encoding"
+CLI_ERRORS_SETTING = "errors"
+CLI_RECONFIGURE_METHOD = "reconfigure"
+CLI_FORMAT_CONTROL_CATEGORY = "Cf"
+CLI_SECURITY_NORMALIZATION = "NFKC"
+CLI_SPACE = " "
+CLI_EMPTY_TEXT = ""
+CLI_SECURITY_SEPARATOR_PATTERN = re.compile(r"[^a-z0-9]+")
+EXIT_SUCCESS = 0
+EXIT_RUNTIME_ERROR = 1
+EXIT_CONFIGURATION_ERROR = 2
+EXIT_INTERRUPTED = 130
 STARTING_STORY_PATH = Path(__file__).resolve().with_name("opening.txt")
 DECISION_PROMPT = (
     "What will you do next, and what will you photograph?\n> "
 )
 BASE64_CANDIDATE_PATTERN = re.compile(r"[A-Za-z0-9_+/=-]{16,}")
+BASE64_PADDING_CHARACTER = "="
+BASE64_ALTERNATE_CHARACTERS = b"-_"
 
-# Correct documented typoglycemia variants before scanning for direct attacks.
+# Fixed direct-injection patterns applied before any story input reaches the API.
+MALICIOUS_PROMPT_PATTERNS = (
+    r"\bignore\s+(?:all\s+)?(?:previous|prior|system|developer)\s+instructions?\b",
+    r"\b(?:reveal|show|print|repeat|quote|output|dump|tell)\b"
+    r".{0,50}\b(?:system|developer|hidden|internal|your)\b"
+    r".{0,30}\b(?:prompt|instructions?)\b",
+    r"\bdeveloper\s+mode\b",
+    r"\b(?:ignore|disregard|forget)\s+(?:all\s+)?(?:safety|security)\s+"
+    r"(?:rules|measures|restrictions|guardrails|settings)\b",
+    r"\bbypass\b.{0,30}\b(?:all\s+)?(?:safety|security)\b"
+    r".{0,20}\b(?:measures|checks|rules|restrictions|safeguards|guardrails|settings)\b",
+    r"\bbypass\s+(?:all\s+)?(?:guardrails|restrictions|rules)\b",
+    r"\b(?:not\s+bound|ignore\s+the)\b.{0,40}\b(?:restrictions|safeguards|safety)\b",
+    r"\b(?:you\s+are\s+now|act\s+as|pretend\s+to\s+be)\b"
+    r".{0,40}\b(?:system|developer|unrestricted|unfiltered)\b",
+)
+COMPACT_MALICIOUS_MARKERS = (
+    "ignoreallpreviousinstructions",
+    "ignoreallpriorinstructions",
+    "revealyoursystemprompt",
+    "showyoursystemprompt",
+    "developerinstructions",
+    "bypassallsafetymeasures",
+    "overrideyoursecuritysettings",
+)
+# Correct common typos before scanning text for direct prompt injections.
 TYPOGLYCEMIA_CORRECTIONS = {
     "ignroe": "ignore",
     "prevoius": "previous",
@@ -57,221 +116,174 @@ class MaliciousPromptError(ValueError):
     """Raised when input attempts to override instructions or extract prompts."""
 
 
-# Explain that fantastical actions are outside this story's realistic world.
-class UnrealisticDecisionError(UserAnswerError):
-    """Raised when a story decision asks for an impossible or supernatural action."""
-
-
 # Convert Unicode and spacing variants into comparable plain text.
-def normalize_security_text(value: str) -> str:
-    normalized = unicodedata.normalize("NFKC", value).casefold()
-    normalized = "".join(
-        character
-        for character in normalized
-        if unicodedata.category(character) != "Cf"
+def normalize_security_text(user_text: str) -> str:
+    normalized_text = unicodedata.normalize(
+        CLI_SECURITY_NORMALIZATION,
+        user_text,
+    ).casefold()
+    normalized_text = "".join(
+        unicode_character
+        for unicode_character in normalized_text
+        if unicodedata.category(unicode_character) != CLI_FORMAT_CONTROL_CATEGORY
     )
-    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
-    words = [TYPOGLYCEMIA_CORRECTIONS.get(word, word) for word in normalized.split()]
-    return " ".join(words)
+    normalized_text = CLI_SECURITY_SEPARATOR_PATTERN.sub(CLI_SPACE, normalized_text)
+    normalized_words = [
+        TYPOGLYCEMIA_CORRECTIONS.get(security_word, security_word)
+        for security_word in normalized_text.split()
+    ]
+    return CLI_SPACE.join(normalized_words)
 
 
 # Detect direct prompt overrides, instruction extraction, and common obfuscations.
-def is_malicious_prompt(value: str) -> bool:
-    normalized = normalize_security_text(value)
-    compact = normalized.replace(" ", "")
-    patterns = (
-        r"\bignore\s+(?:all\s+)?(?:previous|prior|system|developer)\s+instructions?\b",
-        r"\b(?:reveal|show|print|repeat|quote|output|dump|tell)\b"
-        r".{0,50}\b(?:system|developer|hidden|internal|your)\b"
-        r".{0,30}\b(?:prompt|instructions?)\b",
-        r"\bdeveloper\s+mode\b",
-        r"\b(?:ignore|disregard|forget)\s+(?:all\s+)?(?:safety|security)\s+"
-        r"(?:rules|measures|restrictions|guardrails|settings)\b",
-        r"\bbypass\b.{0,30}\b(?:all\s+)?(?:safety|security)\b"
-        r".{0,20}\b(?:measures|checks|rules|restrictions|safeguards|guardrails|settings)\b",
-        r"\bbypass\s+(?:all\s+)?(?:guardrails|restrictions|rules)\b",
-        r"\b(?:not\s+bound|ignore\s+the)\b.{0,40}\b(?:restrictions|safeguards|safety)\b",
-        r"\b(?:you\s+are\s+now|act\s+as|pretend\s+to\s+be)\b"
-        r".{0,40}\b(?:system|developer|unrestricted|unfiltered)\b",
-    )
-    if any(re.search(pattern, normalized) for pattern in patterns):
+def is_malicious_prompt(user_answer: str) -> bool:
+    normalized_answer = normalize_security_text(user_answer)
+    compact_answer = normalized_answer.replace(CLI_SPACE, CLI_EMPTY_TEXT)
+    if any(
+        re.search(injection_pattern, normalized_answer)
+        for injection_pattern in MALICIOUS_PROMPT_PATTERNS
+    ):
         return True
 
-    compact_markers = (
-        "ignoreallpreviousinstructions",
-        "ignoreallpriorinstructions",
-        "revealyoursystemprompt",
-        "showyoursystemprompt",
-        "developerinstructions",
-        "bypassallsafetymeasures",
-        "overrideyoursecuritysettings",
-    )
-    if any(marker in compact for marker in compact_markers):
+    if any(
+        injection_marker in compact_answer
+        for injection_marker in COMPACT_MALICIOUS_MARKERS
+    ):
         return True
 
-    for candidate in BASE64_CANDIDATE_PATTERN.findall(value):
+    for encoded_candidate in BASE64_CANDIDATE_PATTERN.findall(user_answer):
         try:
-            padded = candidate + ("=" * (-len(candidate) % 4))
-            decoded = base64.b64decode(padded, altchars=b"-_", validate=True)
-            decoded_text = decoded.decode("utf-8")
+            padding_text = BASE64_PADDING_CHARACTER * (-len(encoded_candidate) % 4)
+            padded_candidate = encoded_candidate + padding_text
+            decoded_bytes = base64.b64decode(
+                padded_candidate,
+                altchars=BASE64_ALTERNATE_CHARACTERS,
+                validate=True,
+            )
+            decoded_text = decoded_bytes.decode(CLI_UTF8_ENCODING)
         except (binascii.Error, UnicodeDecodeError, ValueError):
             continue
-        decoded_normalized = normalize_security_text(decoded_text)
-        if any(re.search(pattern, decoded_normalized) for pattern in patterns):
+        normalized_decoded_text = normalize_security_text(decoded_text)
+        if any(
+            re.search(injection_pattern, normalized_decoded_text)
+            for injection_pattern in MALICIOUS_PROMPT_PATTERNS
+        ):
             return True
 
     return False
 
 
-# Recognize common plain-language requests to end the story next turn.
-def is_end_request(value: str) -> bool:
-    normalized = normalize_security_text(value)
-    for contraction, expanded in (
-        ("don t", "dont"),
-        ("doesn t", "doesnt"),
-        ("didn t", "didnt"),
-        ("can t", "cant"),
-        ("won t", "wont"),
-        ("wouldn t", "wouldnt"),
-        ("shouldn t", "shouldnt"),
-        ("i m ", "im "),
-    ):
-        normalized = normalized.replace(contraction, expanded)
-    matches = list(
-        re.finditer(
-            r"\b(?:end|finish|conclude|wrap up)\s+(?:(?:the|this|our)\s+)?story\b"
-            r"|\bend\s+of\s+(?:the\s+)?story\b",
-            normalized,
-        )
-    )
-    for match in matches:
-        preceding_words = normalized[: match.start()].split()[-3:]
-        if any(
-            word in {"not", "never", "dont", "doesnt", "didnt", "cant", "wont", "wouldnt", "shouldnt"}
-            for word in preceding_words
-        ):
-            continue
-        return True
-
-    additional_end_patterns = (
-        r"\b(?:i am done|im done|i want to stop|please stop|quit)\b.{0,30}\bstory\b",
-        r"\b(?:story|ending)\b.{0,20}\b(?:is over|is finished|is done)\b",
-    )
-    return any(re.search(pattern, normalized) for pattern in additional_end_patterns)
-
-
-# Reject unsafe and oversized answers, while allowing empty lines to be re-entered.
-def validate_user_answer(value: str) -> str:
-    if is_malicious_prompt(value):
-        raise MaliciousPromptError(
-            "StoryEngine stopped because input attempted to override safety rules or reveal hidden instructions."
-        )
-    if not value.strip():
-        raise UserAnswerError("Enter a story decision before continuing.")
-    if len(value) > MAX_USER_ANSWER_CHARS:
-        raise UserAnswerError(
-            f"Story answers must be {MAX_USER_ANSWER_CHARS} characters or fewer."
-        )
-    if contains_fantastical_action(value, allow_reported_belief=True):
-        raise UnrealisticDecisionError(
-            "Keep actions physically possible; characters may discuss folklore, but fantasy events are filtered out."
-        )
-    return value.strip()
+# Reject malicious, blank, or oversized answers before sending them to the API.
+def validate_user_answer(user_answer: str) -> str:
+    if is_malicious_prompt(user_answer):
+        raise MaliciousPromptError(CLI_MALICIOUS_INPUT_ERROR)
+    if not user_answer.strip():
+        raise UserAnswerError(ERROR_EMPTY_ANSWER)
+    if len(user_answer) > MAX_USER_ANSWER_CHARS:
+        raise UserAnswerError(ERROR_OVERSIZED_ANSWER)
+    return user_answer.strip()
 
 
 # Read one open-ended story decision, reprompting for blank or oversized answers.
 def read_user_answer() -> str | None:
     while True:
         try:
-            answer = input(DECISION_PROMPT)
+            user_answer = input(DECISION_PROMPT)
         except EOFError:
             return None
 
         try:
-            return validate_user_answer(answer)
-        except UserAnswerError as error:
-            print(f"Error: {error}", file=sys.stderr)
-
-
-# Decide whether this answer should produce the final chapter immediately.
-def should_end_story(answer: str, memory: StoryMemory) -> bool:
-    return is_end_request(answer) or memory.step + 1 >= MAX_STORY_DECISIONS
+            return validate_user_answer(user_answer)
+        except UserAnswerError as answer_error:
+            print(CLI_ERROR_TEMPLATE.format(message=answer_error), file=sys.stderr)
 
 
 # Read and print the supplied opening verbatim at the start of every session.
 def print_opening() -> None:
     try:
-        opening = STARTING_STORY_PATH.read_text(encoding="utf-8")
-    except OSError as error:
-        raise StoryMemoryError("The starting story file could not be read.") from error
-    sys.stdout.write(opening)
-    if not opening.endswith("\n"):
-        sys.stdout.write("\n")
+        opening_text = STARTING_STORY_PATH.read_text(encoding=CLI_UTF8_ENCODING)
+    except OSError as file_error:
+        raise StoryMemoryError(CLI_OPENING_READ_ERROR) from file_error
+    sys.stdout.write(opening_text)
+    if not opening_text.endswith(CLI_NEWLINE):
+        sys.stdout.write(CLI_NEWLINE)
 
 
 # Use UTF-8 on Windows and macOS while leaving test streams untouched.
 def configure_terminal_encoding() -> None:
-    for stream in (sys.stdin, sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if callable(reconfigure):
-            reconfigure(encoding="utf-8", errors="replace")
+    for terminal_stream in (sys.stdin, sys.stdout, sys.stderr):
+        configure_encoding = getattr(terminal_stream, CLI_RECONFIGURE_METHOD, None)
+        if callable(configure_encoding):
+            configure_encoding(
+                **{
+                    CLI_ENCODING_SETTING: CLI_UTF8_ENCODING,
+                    CLI_ERRORS_SETTING: CLI_REPLACE_ERRORS,
+                }
+            )
 
 
 # Run the interactive story until completion, EOF, or a safe failure.
 def run_story() -> int:
-    memory = load_memory(MEMORY_PATH)
-    if memory.state.get("story.ending"):
-        print("This story has already ended.", file=sys.stderr)
-        return 0
+    session_memory = load_memory(MEMORY_PATH)
+    if session_memory.state.get(ENDING_KEY):
+        print(CLI_ENDING_EXISTS, file=sys.stderr)
+        return EXIT_SUCCESS
 
     print_opening()
 
     while True:
-        answer = read_user_answer()
-        if answer is None:
-            return 0
-        final_generation = should_end_story(answer, memory)
-        print("Generating next chapter…", file=sys.stderr, flush=True)
-        story_text, memory = generate_story(
-            answer,
-            memory,
-            final_generation=final_generation,
-        )
-        print(story_text, file=sys.stdout, flush=True)
-        if final_generation:
-            print("Story complete.", file=sys.stderr)
-            return 0
+        user_answer = read_user_answer()
+        if user_answer is None:
+            return EXIT_SUCCESS
+        decision_limit_reached = session_memory.step + 1 >= MAX_STORY_DECISIONS
+        print(CLI_GENERATING_STATUS, file=sys.stderr, flush=True)
+        try:
+            generated_chapter, session_memory = generate_story(
+                user_answer,
+                session_memory,
+                decision_limit_reached=decision_limit_reached,
+            )
+        except UnrealisticDecisionError as decision_error:
+            print(CLI_ERROR_TEMPLATE.format(message=decision_error), file=sys.stderr)
+            continue
+
+        print(generated_chapter, file=sys.stdout, flush=True)
+        if session_memory.state.get(ENDING_KEY):
+            print(CLI_COMPLETE_STATUS, file=sys.stderr)
+            return EXIT_SUCCESS
 
 
 # Provide standard help and concise errors with conventional process exit codes.
-def main(arguments: list[str] | None = None) -> int:
+def main(command_arguments: list[str] | None = None) -> int:
     configure_terminal_encoding()
-    parser = argparse.ArgumentParser(
-        prog="storyengine",
-        description="Continue the valley story with open-ended decisions.",
-        epilog="Run with OPENAI_API_KEY set. Enter a free-text decision of up to 400 characters.",
+    argument_parser = argparse.ArgumentParser(
+        prog=CLI_PROGRAM_NAME,
+        description=CLI_DESCRIPTION,
+        epilog=CLI_EPILOG_TEMPLATE.format(
+            character_limit=MAX_USER_ANSWER_CHARS
+        ),
     )
-    parser.parse_args(arguments)
+    argument_parser.parse_args(command_arguments)
 
     try:
         verify_tls_imports()
         validate_openai_sdk_version()
         return run_story()
-    except MaliciousPromptError as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 2
-    except ConfigurationError as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 2
-    except StoryAlreadyEndedError as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 2
-    except StoryMemoryError as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 1
+    except MaliciousPromptError as injection_error:
+        print(CLI_ERROR_TEMPLATE.format(message=injection_error), file=sys.stderr)
+        return EXIT_CONFIGURATION_ERROR
+    except ConfigurationError as configuration_error:
+        print(CLI_ERROR_TEMPLATE.format(message=configuration_error), file=sys.stderr)
+        return EXIT_CONFIGURATION_ERROR
+    except StoryAlreadyEndedError as ended_story_error:
+        print(CLI_ERROR_TEMPLATE.format(message=ended_story_error), file=sys.stderr)
+        return EXIT_CONFIGURATION_ERROR
+    except StoryMemoryError as story_error:
+        print(CLI_ERROR_TEMPLATE.format(message=story_error), file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
     except KeyboardInterrupt:
-        print("\nStory session interrupted; in-memory story state will be discarded.", file=sys.stderr)
-        return 130
+        print(CLI_INTERRUPT_MESSAGE, file=sys.stderr)
+        return EXIT_INTERRUPTED
 
 
 # Execute the CLI only when this module is launched as a program.

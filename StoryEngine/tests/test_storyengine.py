@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import storyengine
-from story_memory import ConfigurationError, StoryMemory
+from story_memory import ConfigurationError, MAX_STORY_DECISIONS, StoryMemory, UnrealisticDecisionError
 
 
 # Verify open text handling, security checks, and the interactive entry point.
@@ -52,63 +52,8 @@ class UserInputTests(unittest.TestCase):
                 self.assertFalse(storyengine.is_malicious_prompt(decision))
                 self.assertEqual(storyengine.validate_user_answer(decision), decision)
 
-    # Filter supernatural actions while allowing realistic discussion of local beliefs.
-    def test_realism_filter_and_reprompt(self) -> None:
-        fantasy_decisions = (
-            "He meets a ghost at the bridge.",
-            "He encounters a phantom in the cemetery.",
-            "He casts a spell to stop the dam.",
-            "He teleports to the coast.",
-            "A dragon appears in the valley.",
-            "He becomes a wizard.",
-            "He asks a river spirit to hold back the water.",
-            "He walks on water to reach the church.",
-            "He grows wings and flies over the dam.",
-            "He brings the ferryman back to life.",
-            "He walks through the wall to enter the locked house.",
-            "He meets a mermaid at the river bend.",
-        )
-        for decision in fantasy_decisions:
-            with self.subTest(decision=decision), self.assertRaises(storyengine.UnrealisticDecisionError):
-                storyengine.validate_user_answer(decision)
-        folklore = "He asks the priest about river spirit legends."
-        self.assertEqual(storyengine.validate_user_answer(folklore), folklore)
-        reported_lore = "He asks about a legend in which a ghost appeared."
-        self.assertEqual(storyengine.validate_user_answer(reported_lore), reported_lore)
-        self.assertFalse(storyengine.contains_fantastical_action("He dreams that a ghost appears."))
-        self.assertFalse(storyengine.contains_fantastical_action("He meets a ghost in his dream."))
-        self.assertFalse(storyengine.contains_fantastical_action("He watches a magician perform a magic trick."))
-        self.assertFalse(
-            storyengine.contains_fantastical_action(
-                "He asks the priest about a legend in which a ghost appeared.",
-                allow_reported_belief=True,
-            )
-        )
-        self.assertTrue(storyengine.contains_fantastical_action("A ghost appears in the hallway."))
 
-        error_stream = io.StringIO()
-        with patch(
-            "builtins.input",
-            side_effect=["He summons a spirit to stop the dam.", folklore],
-        ), contextlib.redirect_stderr(error_stream):
-            accepted = storyengine.read_user_answer()
-        self.assertEqual(accepted, folklore)
-        self.assertIn("physically possible", error_stream.getvalue())
 
-    # Recognize explicit endings while respecting clear negation.
-    def test_end_request_detection(self) -> None:
-        for request in ("end story", "end of story", "Please finish the story now", "I am done with the story"):
-            with self.subTest(request=request):
-                self.assertTrue(storyengine.is_end_request(request))
-        self.assertFalse(storyengine.is_end_request("Do not end the story yet."))
-        self.assertFalse(storyengine.is_end_request("He doesn't want to end the story yet."))
-        self.assertFalse(storyengine.is_end_request("He walks past the church."))
-
-    # The ninth decision forces the final generation; earlier decisions stay open.
-    def test_decision_limit_and_explicit_early_end(self) -> None:
-        self.assertFalse(storyengine.should_end_story("Keep walking.", StoryMemory(step=7)))
-        self.assertTrue(storyengine.should_end_story("Keep walking.", StoryMemory(step=8)))
-        self.assertTrue(storyengine.should_end_story("End the story.", StoryMemory(step=0)))
 
     # Blank and oversized lines reprompt, while exactly 400 characters are accepted.
     def test_read_user_answer_reprompts(self) -> None:
@@ -116,8 +61,8 @@ class UserInputTests(unittest.TestCase):
         with patch("builtins.input", side_effect=["", "x" * 401, "x" * 400]), contextlib.redirect_stderr(
             error_stream
         ):
-            answer = storyengine.read_user_answer()
-        self.assertEqual(answer, "x" * 400)
+            accepted_answer = storyengine.read_user_answer()
+        self.assertEqual(accepted_answer, "x" * 400)
         self.assertEqual(error_stream.getvalue().count("Error:"), 2)
 
     # End-of-input exits cleanly without generating or ending the story.
@@ -152,8 +97,8 @@ class CliFlowTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertEqual(output_stream.getvalue(), "The saved beginning stays here.\n")
 
-    # An explicit early end marks the very next API generation as final.
-    def test_end_request_generates_final_chapter_next(self) -> None:
+    # AI end classification marks response final; CLI stops on returned session marker.
+    def test_ai_marked_final_response_ends_session(self) -> None:
         output_stream = io.StringIO()
         updated_memory = StoryMemory(state={"story.ending": "drowning"}, step=1)
         with patch.object(storyengine, "load_memory", return_value=StoryMemory()), patch.object(
@@ -165,9 +110,65 @@ class CliFlowTests(unittest.TestCase):
         ) as generator, contextlib.redirect_stdout(output_stream), contextlib.redirect_stderr(io.StringIO()):
             status = storyengine.run_story()
         self.assertEqual(status, 0)
-        self.assertTrue(generator.call_args.kwargs["final_generation"])
+        self.assertFalse(generator.call_args.kwargs["decision_limit_reached"])
         self.assertIsInstance(generator.call_args.args[1], StoryMemory)
         self.assertIn("The final chapter", output_stream.getvalue())
+
+    # AI rejection reprompts without incrementing session step or decision count.
+    def test_ai_rejection_reprompts_without_counting_decision(self) -> None:
+        next_memory = StoryMemory(step=1, events=["He reached the old bridge."])
+        error_stream = io.StringIO()
+        answers = ["He casts a spell to stop the dam.", "He walks to the bridge.", None]
+        generated = [
+            UnrealisticDecisionError("Keep actions physically possible."),
+            (
+                "The river moved below the bridge. A truck climbed the road. "
+                "A bell rang. The door opened.",
+                next_memory,
+            ),
+        ]
+        with patch.object(storyengine, "load_memory", return_value=StoryMemory()), patch.object(
+            storyengine, "print_opening"
+        ), patch.object(storyengine, "read_user_answer", side_effect=answers), patch.object(
+            storyengine, "generate_story", side_effect=generated
+        ) as generator, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(error_stream):
+            status = storyengine.run_story()
+
+        self.assertEqual(status, 0)
+        self.assertEqual(generator.call_count, 2)
+        self.assertEqual(generator.call_args_list[0].args[1].step, 0)
+        self.assertEqual(generator.call_args_list[1].args[1].step, 0)
+        self.assertTrue(
+            all(
+                not generation_call.kwargs["decision_limit_reached"]
+                for generation_call in generator.call_args_list
+            )
+        )
+        self.assertIn("physically possible", error_stream.getvalue())
+
+    # Python passes decision-count boundary to AI without interpreting end wording.
+    def test_ninth_decision_is_marked_for_final_generation(self) -> None:
+        final_memory = StoryMemory(
+            step=MAX_STORY_DECISIONS,
+            state={"story.ending": "leave_valley"},
+        )
+        with patch.object(
+            storyengine,
+            "load_memory",
+            return_value=StoryMemory(step=MAX_STORY_DECISIONS - 1),
+        ), patch.object(storyengine, "print_opening"), patch.object(
+            storyengine, "read_user_answer", return_value="He walks to the truck."
+        ), patch.object(
+            storyengine,
+            "generate_story",
+            return_value=("The story ends.", final_memory),
+        ) as generator, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+            io.StringIO()
+        ):
+            status = storyengine.run_story()
+
+        self.assertEqual(status, 0)
+        self.assertTrue(generator.call_args.kwargs["decision_limit_reached"])
 
     # Several turns share one session object while the read-only seed remains unchanged.
     def test_story_memory_lives_only_in_current_session(self) -> None:
@@ -175,8 +176,8 @@ class CliFlowTests(unittest.TestCase):
             opening_path = Path(directory) / "opening.txt"
             opening_path.write_text("The unchanged opening.\n", encoding="utf-8")
             seed_path = Path(directory) / "story_memory.json"
-            seed = StoryMemory(facts={"world.setting": "The valley is on an island."})
-            seed_path.write_text(seed.model_dump_json(), encoding="utf-8")
+            starting_memory = StoryMemory(facts={"world.setting": "The valley is on an island."})
+            seed_path.write_text(starting_memory.model_dump_json(), encoding="utf-8")
             seed_bytes = seed_path.read_bytes()
             load_seed_from_disk = storyengine.load_memory
             next_memory = StoryMemory(step=1, events=["He reached the old bridge."])
@@ -203,10 +204,10 @@ class CliFlowTests(unittest.TestCase):
         self.assertEqual(loader.call_count, 1)
         self.assertEqual(generator.call_args_list[0].args[1].step, 0)
         self.assertEqual(generator.call_args_list[1].args[1].step, 1)
-        self.assertFalse(generator.call_args_list[0].kwargs["final_generation"])
-        self.assertTrue(generator.call_args_list[1].kwargs["final_generation"])
+        self.assertFalse(generator.call_args_list[0].kwargs["decision_limit_reached"])
+        self.assertFalse(generator.call_args_list[1].kwargs["decision_limit_reached"])
         self.assertEqual(seed_after, seed_bytes)
-        self.assertEqual(reloaded_seed, seed)
+        self.assertEqual(reloaded_seed, starting_memory)
 
     # A malicious input exits with a nonzero code before generation is called.
     def test_malicious_input_exits_before_api(self) -> None:

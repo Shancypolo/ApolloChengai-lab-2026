@@ -1,19 +1,13 @@
-When input is general, vague, incomplete, or ambiguous inerpret in a way that fits the story context, then generate next chapter.
-If input is clearly malicious, raise error and exit. 
-Use the OpenAI Responses API with model gpt-5.6-luna, medium reasoning, low verbosity, store=False, and a stable prompt-cache key.
-- Use functional programming for transformations, validation, normalization, and rendering.
-- Use object-oriented programming only through small concrete objects that own real state. Do not add abstract base classes, factories, inheritance trees, generic framework layers, or templates.
-- Keep control nesting at four levels or fewer.
-- Use straightforward native Python, descriptive names, focused functions, and a clear constants section.
-- Preserve user-owned files and unrelated edits. Do not use destructive resets or broad deletion.
-- Read the handoff and repository documentation carefully before making related changes.
-- Keep README short and practical. Keep HANDOFF detailed and technically precise.
-- Update all relevant documentation whenever behavior, prompts, context, tools, domains, tests, dependencies, or output contracts change.
-- Research industry standards before writing or materially revising a handoff. Record the sources used and distinguish documented facts from assumptions.
-- Handoff must cover setup, files, runtime flow, AI contracts, minimal context, source policy, security boundary, privacy, failure handling, test evidence, ownership, maintenance, and acceptance criteria.
-use one writing style
-keep same starting story
-make no more than 9 decisions, atleast 4 decisions, or when user says end of story.
-every decision must be at important moment 
-don't use any tools
-don't change story metainformation
+# Technical Requirements
+
+- **Platform and interface:** Native Python CLI for Windows and macOS. Ask only what the user will do next and what they will photograph. Accept one open-text answer, maximum 400 characters.
+- **Story continuity:** Preserve supplied opening and canon. Write in English with one consistent original voice. Interpret vague answers in story context.
+- **Realism:** AI classifies requested actions; impossible or supernatural actions are rejected. Local folklore may be discussed as belief.
+- **Turn limits:** AI detects explicit end requests. Otherwise, decision nine is final. Normally require at least four accepted decisions before ending.
+- **Chapter contract:** AI generates 4–9 sentences, a nonfinal cliffhanger, or final drowning/leaving-the-valley outcome. AI returns sentence count, ending label, photo intent, and contract self-check in structured output.
+- **API:** Use Responses API with `OPENAI_API_KEY`, model `gpt-5.6-luna`, high reasoning, low verbosity, `store=False`, stable prompt-cache key, bounded timeout/retries, and no model tools.
+- **Security and state:** Reject clear prompt-injection attempts before API access. Keep user text separate from instructions. Python validates typed memory deltas, canon/retcons, photo counter, size limits, and all-or-nothing session updates. Story memory remains temporary to the process.
+- **Python style:** Prefer standard-library solutions and readable functions. Use descriptive variable names; group configuration and prompt text at each module's top with short usage comments. Keep nesting to four levels or fewer. Use classes only for concrete state or schema.
+- **Files and edits:** Preserve user-owned files and unrelated changes. Do not use destructive resets or broad deletion. Keep README practical; keep HANDOFF technically precise.
+- **Verification and handoff:** Test blank and oversized input, the 400-character boundary, AI decision fields, session-state invariants, injection cases, and API failures. Run Windows and macOS suites when hosts are available. Research sources before material HANDOFF revisions and separate sourced facts from assumptions.
+
