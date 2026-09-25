@@ -6,7 +6,26 @@ StoryEngine is an interactive, text-only valley story. It accepts one free-text 
 
 ## Setup
 
-Use Python 3.10 or newer. Install dependencies from `requirements.txt`, set `OPENAI_API_KEY` in the current terminal, and run `storyengine.py`. The same commands work on Windows and macOS with the platform's virtual-environment Python path.
+Use Python 3.10 or newer. Install dependencies, set `OPENAI_API_KEY` in the current terminal, and run `storyengine.py` from project root.
+
+**Windows PowerShell**
+
+```powershell
+py -m venv .venv
+$python = ".\.venv\Scripts\python.exe"
+& $python -m pip install -r requirements.txt
+$env:OPENAI_API_KEY = "your-api-key"
+& $python storyengine.py
+```
+
+**macOS**
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+export OPENAI_API_KEY="your-api-key"
+.venv/bin/python storyengine.py
+```
 
 Run the offline suite with `.venv\Scripts\python.exe -m unittest discover -s tests -v` on Windows or `.venv/bin/python -m unittest discover -s tests -v` on macOS.
 
@@ -15,8 +34,12 @@ Run the offline suite with `.venv\Scripts\python.exe -m unittest discover -s tes
 - `storyengine.py`: CLI, Pydantic schemas, seed loading, delta checks, generation, usage tracking, and generic error output.
 - `story_memory.json`: read-only starting canon.
 - `opening.txt`: story opening shown at launch.
-- `docs/`: story context, setup, requirements, information flow, and historical memory design.
+- `docs/`: story context, requirements, and program information flow.
 - `tests/`: focused memory and CLI unit tests.
+
+See [program information flow](storyengine-information-flow.md) for graph and flowchart convention.
+
+See [program information flow](storyengine-information-flow.md) for the current flowchart and standard used.
 
 ## Runtime flow
 

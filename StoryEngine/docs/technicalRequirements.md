@@ -8,4 +8,4 @@
 - **Usage report:** Use full Responses token usage internally for pricing. At story ending or session EOF, print only output-token count and estimated model cost.
 - **Errors:** Show only `an error occurred` for invalid input or runtime failures. Never print exception details.
 - **Code style:** Keep Pydantic classes for concrete schemas and session state. Keep other logic in small, descriptive functions. Group prompt/configuration constants at module top and use short section comments. Do not add regex features.
-- **Layout:** Keep `storyengine.py`, `opening.txt`, and seed canon at project root; documentation in `docs/`; focused unit tests in `tests/`. Keep tests as consumers of `storyengine.py`; application code must not import tests.
+- **Layout:** Keep `storyengine.py`, `opening.txt`, and seed canon at project root; active documentation in `docs/`; focused unit tests in `tests/`. Keep tests as consumers of `storyengine.py`; application code must not import tests. Maintain program flow text and ImageGen graph in `docs/storyengine-information-flow.md` and `.png`.
