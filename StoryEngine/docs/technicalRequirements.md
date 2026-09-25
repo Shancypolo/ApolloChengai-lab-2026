@@ -1,15 +1,11 @@
 # Technical Requirements
 
-- **Platform and interface:** Native Python CLI for Windows and macOS. Ask only what the user will do next and what they will photograph. Accept one open-text answer, maximum 400 characters.
-- **Story continuity:** Preserve supplied opening and canon. Write in English with one consistent original voice. Interpret vague answers in story context.
-- **Realism:** AI classifies requested actions; impossible or supernatural actions are rejected. Local folklore may be discussed as belief.
-- **Turn limits:** AI detects explicit end requests. Otherwise, decision nine is final. Normally require at least four accepted decisions before ending.
-- **Chapter contract:** AI generates 4–9 sentences, a nonfinal cliffhanger, or final drowning/leaving-the-valley outcome. AI returns reported sentence count, ending label, photo intent, realism, and contract self-check; Python validates structured output and reported sentence range.
-- **API:** Use Responses API with `OPENAI_API_KEY`, model `gpt-5.6-luna`, high reasoning, low verbosity, `store=False`, stable prompt-cache key, bounded timeout/retries, and no model tools.
-- **Security and state:** Reject clear prompt-injection attempts before API access. Keep user text separate from instructions. Python validates typed memory deltas, canon/retcons, photo counter, size limits, and all-or-nothing session updates. Story memory remains temporary to the process.
-- **Python style:** Prefer standard-library solutions and readable functions. Use descriptive variable names; group configuration and prompt text at each module's top with short usage comments. Nest functions no more than three levels. Use classes only for concrete state or schema.
-- **Project layout:** Keep user setup and technical documentation in `docs/`; keep unit tests and `testAPI.py` in `tests/`; keep `storyengine.py`, `story_memory.py`, `opening.txt`, and read-only seed canon at project root.
-- **Information flow:** Keep the editable Mermaid flowchart and generated paper-style PNG in `docs/storyengine-information-flow.md` and `docs/storyengine-information-flow.png`.
-- **Files and edits:** Preserve user-owned files and unrelated changes. Do not use destructive resets or broad deletion. Keep README practical; keep HANDOFF technically precise.
-- **Verification and handoff:** Test blank and oversized input, the 400-character boundary, AI decision fields, session-state invariants, injection cases, and API failures. Run Windows and macOS suites when hosts are available. Research sources before material HANDOFF revisions and separate sourced facts from assumptions.
-
+- **Interface:** Python CLI for Windows and macOS. Ask what the user will do next and what they will photograph. Accept one nonempty answer of at most 400 characters.
+- **Story loop:** Use one structured Responses API call per valid answer. Keep the opening, canon, story voice, five-photo limit, decision-nine ending, and early ending request.
+- **Memory:** Load `story_memory.json` as read-only seed. Keep decisions, events, photo count, and ending state in process memory. Validate each delta, apply it to a copy, then replace session state only after every operation passes.
+- **Delta operations:** Allow `set`, `events`, and `resolve_threads`. Protect existing rules and facts. Keep photo and ending markers application-owned. Reject duplicate or conflicting operations, unknown thread resolutions, invalid values, and oversized deltas.
+- **API:** Use the Responses API with `OPENAI_API_KEY`, model `gpt-5.6-luna`, high reasoning, low verbosity, `store=False`, a stable prompt-cache key, and no model tools.
+- **Usage report:** Use full Responses token usage internally for pricing. At story ending or session EOF, print only output-token count and estimated model cost.
+- **Errors:** Show only `an error occurred` for invalid input or runtime failures. Never print exception details.
+- **Code style:** Keep Pydantic classes for concrete schemas and session state. Keep other logic in small, descriptive functions. Group prompt/configuration constants at module top and use short section comments. Do not add regex features.
+- **Layout:** Keep `storyengine.py`, `opening.txt`, and seed canon at project root; documentation in `docs/`; focused unit tests in `tests/`. Keep tests as consumers of `storyengine.py`; application code must not import tests.

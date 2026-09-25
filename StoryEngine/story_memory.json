@@ -36,7 +36,7 @@
   "state": {
     "story.time": "Morning, the day before the upriver gates are expected to close and flooding begins.",
     "protagonist.location": "In town after descending the white bell tower; his exact location is unspecified.",
-    "camera.exposures_remaining": "Five photographs remain.",
+    "camera.exposures_remaining": "5",
     "valley.occupancy": "Most of the valley is empty after the evacuations."
   },
   "events": [

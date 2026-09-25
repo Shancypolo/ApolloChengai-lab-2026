@@ -1,6 +1,6 @@
 # Final Minimal Story Memory Implementation
 
-> Historical design plan. Current runtime behavior and release boundaries live in [HANDOFF.md](HANDOFF.md) and [technicalRequirements.md](technicalRequirements.md). Implementation keeps generated memory in process RAM and uses AI for story-semantic checks; Python retains schema, memory-delta, and state-integrity validation.
+> Historical design plan. Current runtime behavior and release boundaries live in [HANDOFF.md](HANDOFF.md) and [technicalRequirements.md](technicalRequirements.md). Current CLI, memory schemas, validation, generation, and usage tracking live together in `storyengine.py`; generated memory remains in process RAM.
 
 ## 1. Design goal
 
@@ -321,11 +321,7 @@ relationship.mara_erin
 thread.signal_source
 ```
 
-Recommended validation:
-
-```python
-KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,119}$")
-```
+Current implementation delegates key syntax review to AI and keeps only exact length bounds in Python.
 
 Keys remain stable.
 

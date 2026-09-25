@@ -1,10 +1,6 @@
 # StoryEngine
 
-StoryEngine continues the valley story from `opening.txt`. Run it with Python 3.10 or newer on Windows or macOS.
-
-See [the information-flow diagram](storyengine-information-flow.md) for API, validation, and session-memory boundaries.
-
-![StoryEngine information flow](storyengine-information-flow.png)
+StoryEngine continues the valley story in `opening.txt`. It runs as a Python command-line program on Windows or macOS.
 
 ## Setup
 
@@ -29,20 +25,18 @@ export OPENAI_API_KEY="your-api-key"
 .venv/bin/python storyengine.py
 ```
 
-Use `\.venv\Scripts\python.exe storyengine.py --help` on Windows or `.venv/bin/python storyengine.py --help` on macOS. Enter one free-text story decision per prompt, up to 400 characters. Each prompt asks what you will do next and what you will photograph. Type `end story` to request the ending in the next generation. AI reviews realism, end requests, photo intent, sentence count, and story contract before returning a chapter. Unrealistic actions are reprompted; folklore can be discussed as belief.
+Enter one free-text answer of at most 400 characters. Each prompt asks what you will do next and what you will photograph. Type `end story` to request the ending in the next chapter. Blank or overlength answers reprompt with `an error occurred`.
 
-Install dependencies and run StoryEngine with the same virtual-environment interpreter. At startup, the program verifies the `certifi` CA bundle and attempts to import `httpx2`, then checks the OpenAI SDK version. `httpx2` is optional with supported SDK 2.x; the SDK uses regular `httpx`. Unsupported SDK versions get setup instructions before the story starts. Story generation uses high reasoning effort.
+Each valid answer uses one structured Responses API request. The story has five photographs and ends with the protagonist drowning or leaving the valley. The model is instructed to keep events physically possible; characters may discuss folklore as belief.
 
-To test API access without starting a story, run `\.venv\Scripts\python.exe -m tests.testAPI` in Windows PowerShell or `.venv/bin/python -m tests.testAPI` on macOS. This sends one short Responses API request and prints a request ID when available; it never prints the API key.
+`story_memory.json` is read-only starting canon. Accepted decisions, photo count, and chapter state stay in RAM until the process ends. A new launch starts from the seed story. Any runtime failure prints only `an error occurred`.
 
-The story has five photographs and ends with the protagonist drowning or leaving the valley. AI is instructed to keep events physically possible; characters may discuss local folklore.
-
-`story_memory.json` is read-only starting canon. Decisions, photo count, and chapter state stay in RAM only while StoryEngine runs; closing and restarting starts again from the same seed story.
+When the story ends or you exit after generating chapters, StoryEngine prints output-token count and estimated GPT-5.6 Luna high-reasoning cost.
 
 ## Tests
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
 On macOS, run `.venv/bin/python -m unittest discover -s tests -v`.
