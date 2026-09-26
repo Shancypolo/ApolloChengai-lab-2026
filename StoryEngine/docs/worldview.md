@@ -4,6 +4,8 @@ The story takes place on a small Caribbean island nation in the early 1970s. The
 
 A river valley in the island's interior is about to be deliberately flooded by a newly completed hydroelectric dam. The project is expected to bring electricity and irrigation to thousands of people, but several old communities have been evacuated to create the reservoir. The flooding begins the next day.
 
+By the final chapter, floodwater submerges the entire island. The cause is not confirmed as supernatural; the story must continue through the submergence and show what happens to the protagonist and his photographs afterward.
+
 Most of the valley is already empty.
 
 Homes stand with their doors open. Pale rectangles remain where family photographs once hung. Furniture has been carried away, but small useless things remain behind: cups, calendars, broken toys, empty bottles, old newspapers, nails in walls.
@@ -101,6 +103,10 @@ They can only preserve five fragments of it.
 His central problem is not finding five beautiful places.
 
 It is deciding which five losses deserve to become visible.
+
+### Flood Aftermath
+
+The story may end in any outcome. Final chapter must continue until floodwater has submerged the entire island, then clearly establish where the protagonist ends up and what becomes of his photographs. If he took none, state that no photographs exist and account for his camera and unused film. Photographs may be lost, damaged, recovered, or preserved; their fate must be clear rather than left as a cliffhanger.
 
 ### Places He Can Go
 

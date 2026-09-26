@@ -2,7 +2,7 @@
 
 ## Purpose
 
-StoryEngine is an interactive, text-only valley story. It accepts one free-text decision of up to 400 characters per turn, preserves generated state for one process, and ends with the protagonist drowning or leaving the valley.
+StoryEngine is an interactive, text-only valley story. It accepts one free-text decision of up to 400 characters per turn and preserves generated state for one process. Any final outcome is allowed; final chapter continues until the entire island is submerged and explains protagonist's fate and fate of his photographs afterward.
 
 ## Setup
 
@@ -46,7 +46,7 @@ See [program information flow](storyengine-information-flow.md) for the current 
 1. Load `story_memory.json` as a new in-memory session and print `opening.txt`.
 2. Ask what the user will do next and what they will photograph. Reprompt blank or overlength answers with `an error occurred`.
 3. Send one Responses API request with fixed story instructions, the full memory, and user answer as JSON data. The request uses `gpt-5.6-luna`, high reasoning, low verbosity, `store=False`, a stable prompt-cache key, and no tools.
-4. Parse a `GenerationResult`. Validate story and ending metadata, photo availability, and the full memory delta.
+4. Parse a `GenerationResult`. Validate story and ending metadata, require final character/photo fate summaries after island submergence, check photo availability, and validate the full memory delta.
 5. Apply accepted changes to a copy of `StoryMemory`, decrement photo count when used, set the ending marker on final chapter, and increment turn count. Add response token usage to session totals, then print the chapter.
 6. Continue until an ending or end-of-input. Print output-token count and estimated API cost, then exit. Closing the process discards generated state; next launch reloads seed canon.
 

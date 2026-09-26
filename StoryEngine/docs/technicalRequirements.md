@@ -1,9 +1,10 @@
 # Technical Requirements
 
 - **Interface:** Python CLI for Windows and macOS. Ask what the user will do next and what they will photograph. Accept one nonempty answer of at most 400 characters.
-- **Story loop:** Use one structured Responses API call per valid answer. Keep the opening, canon, story voice, five-photo limit, decision-nine ending, and early ending request.
+- **Story loop:** Use one structured Responses API call per valid answer. Keep the opening, canon, story voice, five-photo limit, decision-nine ending, and early ending request. Allow any final outcome, but carry the final chapter past full-island submergence and explain the protagonist's fate and photograph fate.
 - **Memory:** Load `story_memory.json` as read-only seed. Keep decisions, events, photo count, and ending state in process memory. Validate each delta, apply it to a copy, then replace session state only after every operation passes.
 - **Delta operations:** Allow `set`, `events`, and `resolve_threads`. Protect existing rules and facts. Keep photo and ending markers application-owned. Reject duplicate or conflicting operations, unknown thread resolutions, invalid values, and oversized deltas.
+- **Ending validation:** Accept any nonempty ending label except `none`, which means continue. Require final `character_fate` and `photographs_fate` summaries; require both to be null on nonfinal chapters. Final prose must match summaries and explain where captured photographs end up after the island is submerged. If no photograph was taken, account for the camera and unused film.
 - **API:** Use the Responses API with `OPENAI_API_KEY`, model `gpt-5.6-luna`, high reasoning, low verbosity, `store=False`, a stable prompt-cache key, and no model tools.
 - **Usage report:** Use full Responses token usage internally for pricing. At story ending or session EOF, print only output-token count and estimated model cost.
 - **Errors:** Show only `an error occurred` for invalid input or runtime failures. Never print exception details.
