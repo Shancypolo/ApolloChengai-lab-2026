@@ -69,7 +69,7 @@ class TokenUsage:
     requests: int = 0
     unavailable_responses: int = 0
 
-    # Keep input subtotals for pricing; only output_tokens appears in the CLI summary.
+    # Keep input subtotals for pricing and show input/output parts in the final summary.
     input_tokens: int = 0
     cached_input_tokens: int = 0
     cache_write_tokens: int = 0
@@ -597,22 +597,25 @@ def read_user_answer() -> str | None:
         print(ERROR_MESSAGE, file=sys.stderr)
 
 
-# Show only requested output count and cost; retain fuller usage internally for pricing.
+# Show total input-plus-output tokens and estimated cost only when the session closes.
 def print_usage_summary(session_usage: TokenUsage) -> None:
-    """Print output-token count and estimated model cost at session end."""
+    """Print total token count and estimated model cost at session end."""
     if session_usage.requests == 0:
         return
 
     # Keep display label tied to request setting so config changes stay reflected in summary.
     reasoning_effort = REASONING_SETTINGS["effort"]
     if session_usage.unavailable_responses == session_usage.requests:
-        print("Output tokens: unavailable.")
+        print("Total tokens: unavailable.")
         print(f"Estimated {MODEL_DISPLAY_NAME} ({reasoning_effort}) cost: unavailable.")
         return
 
-    # Missing response accounting means both printed values cover known generations only.
+    # Missing response accounting means token and cost totals cover known generations only.
     partial_note = " (partial)" if session_usage.unavailable_responses else ""
-    print(f"Output tokens{partial_note}: {session_usage.output_tokens:,}.")
+    print(
+        f"Total tokens{partial_note}: {session_usage.total_tokens:,} "
+        f"(input {session_usage.input_tokens:,}; output {session_usage.output_tokens:,})."
+    )
     print(
         f"Estimated {MODEL_DISPLAY_NAME} ({reasoning_effort}) cost{partial_note}: "
         f"${session_usage.estimated_cost_usd:.6f} USD."
