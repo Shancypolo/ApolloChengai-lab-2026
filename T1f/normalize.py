@@ -1,6 +1,6 @@
 import pandas as pd
-import numpy as np
 import argparse
+
 
 def preprocess_csv(input_file, output_file, seed=42):
     df = pd.read_csv(input_file)
@@ -17,29 +17,23 @@ def preprocess_csv(input_file, output_file, seed=42):
         max_val = values.max()
 
         if max_val == min_val:
-            df[col] = 0.0
+            normalized = 0.0
         else:
-            df[col] = (values - min_val) / (max_val - min_val)
+            normalized = (values - min_val) / (max_val - min_val)
+
+        # Flip the normalized mapping for columns 3 and 6
+        df[col] = 1 - normalized if i in [3, 6] else normalized
 
     # Yes/No: No = 0, Yes = 1
     for i in [4, 11, 13]:
         col = cols[i - 1]
         values = df[col].astype("string").str.strip().str.lower()
-
-        df[col] = values.map({
-            "no": 0,
-            "yes": 1
-        }).astype("Int64")
+        df[col] = values.map({"no": 0, "yes": 1}).astype("Int64")
 
     # Low/Medium/High: 0, 0.5, 1
     col = cols[5 - 1]
     values = df[col].astype("string").str.strip().str.lower()
-
-    df[col] = values.map({
-        "low": 0.0,
-        "medium": 0.5,
-        "high": 1.0
-    })
+    df[col] = values.map({"low": 0.0, "medium": 0.5, "high": 1.0})
 
     # Column 8: None = 0, everything else = 1
     col = cols[8 - 1]
@@ -56,16 +50,18 @@ def preprocess_csv(input_file, output_file, seed=42):
     values = pd.to_numeric(df[col], errors="raise")
     df[col] = (values > 0).astype(int)
 
-    # One-hot encode columns 2 and 7
+    # One-hot encode columns 2 and 7 with numbered names
     one_hot_cols = [cols[2 - 1], cols[7 - 1]]
+    encoded = []
 
-    df = pd.get_dummies(
-        df,
-        columns=one_hot_cols,
-        prefix=one_hot_cols,
-        prefix_sep="_",
-        dtype=int
-    )
+    for col in one_hot_cols:
+        dummies = pd.get_dummies(df[col], dtype=int)
+        dummies.columns = [
+            f"{col}_{i}" for i in range(1, len(dummies.columns) + 1)
+        ]
+        encoded.append(dummies)
+
+    df = pd.concat([df.drop(columns=one_hot_cols), *encoded], axis=1)
 
     # Shuffle rows reproducibly
     df = df.sample(frac=1, random_state=seed).reset_index(drop=True)
@@ -85,9 +81,4 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42)
 
     args = parser.parse_args()
-
-    preprocess_csv(
-        args.input_file,
-        args.output_file,
-        args.seed
-    )
+    preprocess_csv(args.input_file, args.output_file, args.seed)
