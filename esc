@@ -1,0 +1,293 @@
+[33mcommit 02e3851bcc1fc3e984c599e64bb2595deb30fe6a[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Wed Oct 7 20:46:22 2026 -0400
+
+    quantized low mid high values, no and yes values, and bucketed leadership roles to yes and no and quantized them.
+
+[33mcommit 800e501f00a8c7e3b7960980b563c1af083d2dbf[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Wed Oct 7 15:10:39 2026 -0400
+
+    normalized, removed, onehot encoded, fixed outliers of data
+
+[33mcommit f50eb54f2277ad0557e73989d7e86813ec182f9d[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Fri Oct 2 15:15:04 2026 -0400
+
+    fixed convo_logger.py
+
+[33mcommit 997d1120bda55c103117e1a6a9289dddf4b031dd[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Tue Sep 29 21:13:31 2026 -0400
+
+    improved comments, better docstrings
+
+[33mcommit a5cb86281d00a1dbad13063f2b0214143ed97e13[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Sat Sep 26 17:55:16 2026 -0400
+
+    display total tokens not only output tokens
+
+[33mcommit 6cebd1da9f11bf305344733fde6ce962f080b581[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Sat Sep 26 17:42:23 2026 -0400
+
+    removed obsolete tests, allow open ending
+
+[33mcommit a59dc6d7ce4cb2525a241acf3db519ccdab2ab80[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Thu Sep 24 23:52:13 2026 -0400
+
+    detailed comments, updated graphic
+
+[33mcommit 015f663c05123bced6fb93ed7ed9a52dba54aab6[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Thu Sep 24 22:40:24 2026 -0400
+
+    updated docs, removed obsolete and unneccesary docs, updated infographic
+
+[33mcommit e1ec99058a6ed92b3d1312cb51571f8c56936cf3[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Thu Sep 24 22:01:27 2026 -0400
+
+    removed hard coded tests, ai guard, startup tests, error handling, accessability features. Outsourced error handling to test programs. Added token cnt and cost. Combined memory and main program.
+
+[33mcommit 76893b0c53b50b7a522bf355d1f1268013f4715a[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Thu Sep 24 17:56:41 2026 -0400
+
+    clleaned obsolete files, removed duplicate gitignore, more docs
+
+[33mcommit 3f25dc22701934697e9008de3f0e0b08d4fc2385[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Wed Sep 23 22:10:32 2026 -0400
+
+    outsources features to ai, shortened testapi.py, improved readability, reasoning set to high
+
+[33mcommit 489df80e08ca65f525f501cc8255f9ce12297967[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Wed Sep 23 17:58:16 2026 -0400
+
+    fixed connection api
+
+[33mcommit a9dbb0190379b7104c258a2e7828ece7301715ea[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Wed Sep 23 16:33:00 2026 -0400
+
+    Draft1: update requirements, added story opening, added story opening memory, made 1st non-working version, added docs
+
+[33mcommit d1d61acf207851ab0c5cd427bfb0ee8d6c95eec5[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Mon Sep 21 15:15:24 2026 -0400
+
+    clarified project requirements, created memory persistance technical implementation plan
+
+[33mcommit 867cccd9d4dc1335a4de74e0298f51b8651122e1[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Mon Sep 21 14:12:19 2026 -0400
+
+    initialized Story Engine project
+
+[33mcommit c48ab2b8b0031cbd083bb4708f9c2aab23e9e562[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Wed Sep 16 22:54:13 2026 -0400
+
+    Debugged, lossened ai return structure, made conversations more natural, updated docs
+
+[33mcommit d21a0dcb39e43889d9bc77e781b07879d90667ed[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Mon Sep 14 17:51:48 2026 -0400
+
+    simplified code
+
+[33mcommit 1700856a39b7930dabe4db16eafb2b7057081ffa[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Mon Sep 14 01:20:54 2026 -0400
+
+    cleaned code, trimmed features, added comments
+
+[33mcommit 52f268c768982385fa08eebaf2d70fb19837947b[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Mon Sep 14 00:49:47 2026 -0400
+
+    lowered ai usage, improved speed
+
+[33mcommit f33404072a667ca79ed654d2bebd328a71108a7b[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Sat Sep 12 10:00:44 2026 -0400
+
+    outsources functins to ai, removed guard ai, shortened code
+
+[33mcommit 93ae50b83ae9b5f05b767bc756ec6baa585fe8a5[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Sat Sep 12 09:30:29 2026 -0400
+
+    more permissive prompt injection guard, rename avoid confusion
+
+[33mcommit 74df07487a2add014b61a46b9213a2dfb016bdfc[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Sat Sep 12 09:28:12 2026 -0400
+
+    pivoted to dynamic ai questions, more friendly, flexible
+
+[33mcommit 36f9b8c75e638c88ea964ed65cfc7676c3881b8a[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Sat Sep 12 09:02:00 2026 -0400
+
+    week3 v1
+
+[33mcommit e6b13d22c8e93a215c615f7342cb4f231cb2d0dc[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Wed Sep 9 15:18:15 2026 -0400
+
+    test responses api function and tools
+
+[33mcommit e9b4bd6fe16994d736463769a7a4c5b59f780924[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Mon Aug 31 20:04:47 2026 -0400
+
+    task 1b.1
+
+[33mcommit ffea46cd3e7ee24a86611bafceebf14717097767[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Mon Aug 31 12:34:43 2026 -0400
+
+    added more warning options, simplier syntax,  more compatibility
+
+[33mcommit 528c93a19af5881edc5363ff29f8a4c6787cc901[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Fri Aug 28 15:14:34 2026 -0400
+
+    improved adaptability based on onlinie experience, switched to careful logic as run w/ warning > error
+
+[33mcommit 3e96068d3bc76d382992599acc995731db004240[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Fri Aug 28 15:04:00 2026 -0400
+
+    adaptive to Gift1-5.csv, added explanation comments
+
+[33mcommit 54e429ad8114c5ce9d6cbdef437a103f072ebb55[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Thu Aug 27 15:56:07 2026 -0400
+
+    added 1a.1 comments
+
+[33mcommit 2bb70fd649e507792de9903f2cd9cee890fcbfd2[m
+Merge: be047c3 38f7a1c
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Thu Aug 27 15:36:31 2026 -0400
+
+    Merge branch 'main' of https://github.com/DanielGift/teacher-ai-lab-2026, removed prev README.MD for upstream README
+
+[33mcommit be047c351824c0cf68d77549e22dfe77ab6116a8[m
+Author: Shancypolo <apollo.shancy@zohomail.com>
+Date:   Wed Aug 26 14:48:34 2026 -0400
+
+    Initial commit. Added test py
+
+[33mcommit dc90936d9da941f9a0a1899bb7cd6f8529f6d8d0[m
+Author: Apollo Cheng <apollo.shancy@zohomail.com>
+Date:   Wed Aug 26 14:34:53 2026 -0400
+
+    Initial commit
+
+[33mcommit 38f7a1cdeab405a806e34f308d7d277a39992f7d[m[33m ([m[1;31mupstream/main[m[33m, [m[1;31mupstream/HEAD[m[33m)[m
+Author: dgi314 <dani.daniel.gift@gmail.com>
+Date:   Fri Aug 14 23:20:39 2026 -0400
+
+    Add Tkinter and simple/complex GUI versions
+
+[33mcommit 72db8a3b465872dba75206ec50a54b31b4986d43[m
+Author: dgi314 <dani.daniel.gift@gmail.com>
+Date:   Fri Aug 14 15:58:51 2026 -0400
+
+    Added GUI sample
+
+[33mcommit 89ea08d942c75306adcbad1911823f455c71ab7f[m
+Author: dgi314 <dani.daniel.gift@gmail.com>
+Date:   Mon Aug 10 17:49:58 2026 -0400
+
+    Added convo logger and organized files
+
+[33mcommit 648f9f98a0540fd14240bc9f15e390c0607ab4a3[m
+Author: dgi314 <dani.daniel.gift@gmail.com>
+Date:   Sat Aug 8 14:18:28 2026 -0400
+
+    updated foodbank
+
+[33mcommit 7699766f2d65d78cd375c2c64a31ece5608bf9ee[m
+Merge: 1672247 31732b2
+Author: dgi314 <dani.daniel.gift@gmail.com>
+Date:   Sat Aug 8 14:15:34 2026 -0400
+
+    Merge branch 'main' of https://github.com/DanielGift/teacher-ai-lab-2026
+
+[33mcommit 16722473578c08d590c49fc3aff5234b9468a9d0[m
+Author: dgi314 <dani.daniel.gift@gmail.com>
+Date:   Sat Aug 8 14:15:32 2026 -0400
+
+    added foodbank
+
+[33mcommit 31732b2971dcb595ea1ed602758a22777932277f[m
+Author: Daniel Gift <daniel.gift@sbs.org>
+Date:   Fri Aug 7 12:00:01 2026 -0400
+
+    Update README to simplify remote setup instructions
+    
+    Removed instructions for adding a remote origin link.
+
+[33mcommit 686eacc1a3b294dda8ec756d91a38954d5970cf0[m
+Author: Daniel Gift <daniel.gift@sbs.org>
+Date:   Fri Aug 7 11:48:41 2026 -0400
+
+    Fix formatting and capitalization in README instructions
+    
+    Corrected capitalization and formatting in instructions.
+
+[33mcommit 19c34ff5ba7f0d6bbea215324a1951457b8638b0[m
+Merge: 6d56b6b 796d3fe
+Author: dgi314 <dani.daniel.gift@gmail.com>
+Date:   Fri Aug 7 11:44:56 2026 -0400
+
+    Merge branch 'main' of https://github.com/DanielGift/teacher-ai-lab-2026 into main
+
+[33mcommit 796d3feda8fcb5524f553d9f4187bffb262e8d21[m
+Author: Daniel Gift <daniel.gift@sbs.org>
+Date:   Fri Aug 7 11:41:50 2026 -0400
+
+    Update git pull command in README
+    
+    Added --allow-unrelated-histories flag to git pull command.
+
+[33mcommit 6d56b6b5a6d15abb5bfa3e8004bb81babdf7977a[m
+Merge: e84f758 5fbdb8c
+Author: dgi314 <dani.daniel.gift@gmail.com>
+Date:   Fri Aug 7 11:40:01 2026 -0400
+
+    Merge branch 'main' of https://github.com/DanielGift/teacher-ai-lab-2026 into main
+
+[33mcommit e84f758694be9ee4d182478a6f6acf2ed15f1434[m
+Author: dgi314 <dani.daniel.gift@gmail.com>
+Date:   Fri Aug 7 11:36:48 2026 -0400
+
+    Initial commit
+
+[33mcommit 5fbdb8cbeae2f8e4831c1ad309d55741a93213eb[m
+Author: dgi314 <dani.daniel.gift@gmail.com>
+Date:   Fri Aug 7 11:36:10 2026 -0400
+
+    added first project files
+
+[33mcommit 05a218fade2d40384958d5452d48256db9f42672[m
+Author: Daniel Gift <daniel.gift@sbs.org>
+Date:   Fri Aug 7 11:19:28 2026 -0400
+
+    Enhance README with upstream repository instructions
+    
+    Added instructions for linking and updating from upstream repository.
+
+[33mcommit 29ef56e5e94f074f570c99c719e91cefb18c1b07[m
+Author: Daniel Gift <daniel.gift@sbs.org>
+Date:   Fri Aug 7 11:02:54 2026 -0400
+
+    Initial commit
