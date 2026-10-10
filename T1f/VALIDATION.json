@@ -1,0 +1,39 @@
+{
+  "status": "passed",
+  "environment": {
+    "numpy": "2.3.5",
+    "pandas": "2.2.3",
+    "scipy": "1.17.0",
+    "sklearn": "1.8.0",
+    "joblib": "1.5.3",
+    "threadpoolctl": "3.6.0"
+  },
+  "classifier_retrained": false,
+  "reference_rows": 80,
+  "reference_predicted_classes_preserved": true,
+  "exact_reference_probability_absolute_tolerance": 1e-14,
+  "uploaded_numbered_csv_probability_absolute_tolerance": 1e-09,
+  "integration_checks": [
+    "all 80 uploaded numbered rows reproduce original model predictions",
+    "rewritten training transformation matches original anonymizer on synthetic raw coordinates",
+    "identity fields removed before anonymizer call",
+    "case whitespace unit suffix decimal commas boolean aliases and reordered headers",
+    "TSV semicolon-delimited JSON and JSONL inputs",
+    "unknown categories use zero indicators",
+    "missing values use saved training medians and modes",
+    "batch and single-row transformations are identical",
+    "out-of-range numeric inputs accepted and optional clipping verified",
+    "original raw bounds are required rather than guessed or learned from prediction batches",
+    "mapping-model category schema mismatch rejected",
+    "legacy category indicator names and multiple active indicators rejected",
+    "terminal inference creates or modifies no files",
+    "single raw record CLI after one-time synthetic training setup",
+    "malformed CSV field counts rejected and existing mapping transforms leave mappings unchanged"
+  ],
+  "actual_raw_training_bounds_available": false,
+  "raw_edge_case_test_data": "Synthetic raw coordinates used only for tests, not delivered as original data.",
+  "raw_prediction_requirement": "Fit data_mappings.json once on the original unanonymized training file.",
+  "operating_systems_tested": [
+    "Linux"
+  ]
+}
