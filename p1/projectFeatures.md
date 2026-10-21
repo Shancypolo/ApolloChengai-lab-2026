@@ -6,6 +6,7 @@
 - Playlist titles load before summaries. GPT-6 Luna assigns topic labels from title strings only; uninformative titles receive `Other`.
 - Users can sort by playlist order, title, publish date, author, or topic, filter the title list, and select all, none, or individual videos.
 - Selected videos are summarized in a background batch; saved summaries are reused by video ID unless the user requests a refresh.
+- Collapsed summaries in batch results and archive detail can be searched by title, topic, or summary text without JavaScript.
 - Summary and follow-up prompts use English. Follow-ups fetch captions and store only the question and answer.
 - Local JSON archive stores source rows, title topics, summaries, chat turns, timestamps, and summary preferences.
 - Multiple playlists can be saved side by side; automatic startup refresh of newly added playlist videos remains deferred.

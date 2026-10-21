@@ -146,15 +146,27 @@ def main() -> None:
             assert page.locator('input[name="video_ids"]:checked').count() == 0
             page.locator("button[name=list_action][value=select_all]").click()
             assert page.locator('input[name="video_ids"]:checked').count() == 3
-            page.locator("button[name=list_action][value=select_none]").click()
-            page.locator('input[name="video_ids"]').first.check()
+            page.locator("button[name=list_action][value=select_all]").click()
+            assert page.locator('input[name="video_ids"]:checked').count() == 3
             page.locator("button[name=list_action][value=summarize]").click()
             page.get_by_text("BATCH COMPLETE", exact=True).wait_for(timeout=15_000)
-            page.get_by_text("presents a careful claim and supporting evidence").wait_for()
+            page.locator(".summary-prose").first.wait_for()
+            assert page.locator(".summary-card").count() == 3
             assert page.locator(".summary-card[open]").count() == 1
 
-            page.locator('input[name="question"]').fill("How certain is that conclusion?")
-            page.locator(".chat-form button[type=submit]").click()
+            page.locator("#summary-filter").fill("Video 3")
+            page.locator(".summary-filter button").click()
+            assert page.locator(".summary-card").count() == 1
+            assert page.locator(".summary-title").inner_text() == "Video 3"
+            page.locator("#summary-filter").fill("no matching title")
+            page.locator(".summary-filter button").click()
+            assert page.locator(".summary-card").count() == 0
+            page.get_by_text("No video summaries match this search.").wait_for()
+            page.locator(".summary-filter a").click()
+            assert page.locator(".summary-card").count() == 3
+
+            page.locator('.chat-form input[name="question"]').first.fill("How certain is that conclusion?")
+            page.locator(".chat-form button[type=submit]").first.click()
             page.get_by_text("The example presents the conclusion as tentative.").wait_for(timeout=10_000)
             assert page.locator(".chat-turn").count() == 1
             assert_no_embedded_scripts_or_aria(page)
@@ -167,8 +179,13 @@ def main() -> None:
             assert page.get_by_text("Lectures on evidence and uncertainty").count() >= 1
             page.screenshot(path=str(screenshots_directory / "archive-mobile.png"), full_page=True)
             page.locator(".archive-row").first.click()
-            page.get_by_text("presents a careful claim and supporting evidence").wait_for()
+            page.locator(".summary-prose").first.wait_for()
             page.get_by_text("How certain is that conclusion?").wait_for()
+            page.locator("#archive-filter").fill("Video 3")
+            page.locator(".summary-filter button").click()
+            assert page.locator(".archive-summary").count() == 1
+            page.locator(".summary-filter a").click()
+            assert page.locator(".archive-summary").count() == 3
             assert_no_horizontal_overflow(page, 320, 940)
             page.screenshot(path=str(screenshots_directory / "archive-detail-mobile.png"), full_page=True)
             page.locator(".sidebar-summary").click()

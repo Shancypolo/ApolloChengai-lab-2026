@@ -34,6 +34,7 @@ DEFAULT_DATA_DIRECTORY = Path(
 LOG_FILE_NAME = "pageone.log"
 MAX_PREFERENCE_LENGTH = 2_000
 MAX_QUESTION_LENGTH = 1_000
+MAX_FILTER_LENGTH = 200
 VIDEO_SORT_OPTIONS = {"original", "published_at", "author", "topic", "title"}
 
 
@@ -189,6 +190,26 @@ def ordered_source_videos(source: dict[str, Any], sort_by: str, filter_text: str
     if query:
         videos = [video for video in videos if query in str(video.get("title", "")).casefold()]
     return videos
+
+
+def filter_summary_videos(
+    videos: list[dict[str, Any]], summaries: dict[str, Any], filter_text: str
+) -> list[dict[str, Any]]:
+    """Find saved video rows by title, topic, or summary text."""
+    query = filter_text.strip().casefold()[:MAX_FILTER_LENGTH]
+    if not query:
+        return list(videos)
+    matches = []
+    for video in videos:
+        saved = summaries.get(video.get("id", ""), {})
+        searchable_text = " ".join((
+            str(video.get("title", "")),
+            str(video.get("topic", "")),
+            str(saved.get("summary", "")),
+        )).casefold()
+        if query in searchable_text:
+            matches.append(video)
+    return matches
 
 
 def render_source_results(
@@ -591,7 +612,15 @@ def create_app(
                 safe_log(app, "Could not render a completed batch", error)
                 return render_template("notice.html", message="The archive could not be read; the original file was kept.", tone="error"), 500
             source = archive["sources"].get(job["source_key"], {})
-            return render_template("job_results.html", job=job, source=source, summaries=archive["summaries"])
+            filter_text = request.args.get("filter_text", "")[:MAX_FILTER_LENGTH]
+            return render_template(
+                "job_results.html",
+                job=job,
+                source=source,
+                summaries=archive["summaries"],
+                videos=filter_summary_videos(source.get("videos", []), archive["summaries"], filter_text),
+                filter_text=filter_text,
+            )
         return render_template("job_progress.html", job=job)
 
     @app.get("/archive")
@@ -608,7 +637,15 @@ def create_app(
         source = archive["sources"].get(source_key)
         if not source:
             abort(404)
-        return render_template("archive_detail.html", source=source, summaries=archive["summaries"])
+        filter_text = request.args.get("filter_text", "")[:MAX_FILTER_LENGTH]
+        videos = filter_summary_videos(source.get("videos", []), archive["summaries"], filter_text)
+        return render_template(
+            "archive_detail.html",
+            source=source,
+            summaries=archive["summaries"],
+            videos=videos,
+            filter_text=filter_text,
+        )
 
     @app.route("/settings", methods=["GET", "POST"])
     def settings():

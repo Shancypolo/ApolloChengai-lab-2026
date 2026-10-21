@@ -17,7 +17,7 @@ import sys
 APP_DIRECTORY = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP_DIRECTORY))
 
-from app import create_app
+from app import create_app, filter_summary_videos
 from storage import DEFAULT_PREFERENCES, JsonStore
 from summary_service import (
     CHAT_INSTRUCTIONS,
@@ -185,6 +185,21 @@ class PageOneCoreTests(unittest.TestCase):
         ]
         self.assertTrue(all(not title_has_topic_clues(title) for title in vague_titles))
         self.assertTrue(all(title_has_topic_clues(title) for title in informative_titles))
+
+    def test_summary_search_matches_title_topic_or_summary_without_case_sensitivity(self):
+        """Find a saved video by any of its displayed summary fields."""
+        videos = [
+            {"id": "one", "title": "A study of Evidence", "topic": "Research"},
+            {"id": "two", "title": "Café customs", "topic": "Culture"},
+        ]
+        summaries = {
+            "one": {"summary": "Methods compare two groups."},
+            "two": {"summary": "A view of everyday life."},
+        }
+        self.assertEqual(filter_summary_videos(videos, summaries, "EVIDENCE"), [videos[0]])
+        self.assertEqual(filter_summary_videos(videos, summaries, "methods"), [videos[0]])
+        self.assertEqual(filter_summary_videos(videos, summaries, "café"), [videos[1]])
+        self.assertEqual(filter_summary_videos(videos, summaries, "unknown"), [])
 
     def test_topic_batches_have_one_label_per_title(self):
         """Split large title lists into capped requests and preserve order."""

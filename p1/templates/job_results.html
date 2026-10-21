@@ -4,8 +4,10 @@
 <section class="batch-result">
   <div class="progress-top"><span class="kicker">{{ "BATCH COMPLETE" if job.status == "complete" else "BATCH COMPLETE WITH ISSUES" }}</span><span>{{ job.succeeded }} / {{ job.total }} ready</span></div>
   {% if job.failed %}<div class="notice notice-error"><strong>{{ job.failed|length }} video(s) need attention.</strong><ul>{% for failed in job.failed %}<li>{{ failed.title }} — {{ failed.message }}</li>{% endfor %}</ul></div>{% endif %}
+  <form class="filter-row summary-filter" method="get" action="{{ url_for('job_progress', job_id=job.id) }}"><input id="summary-filter" type="search" name="filter_text" value="{{ filter_text }}" maxlength="200" placeholder="Find a title, topic, or summary…"><button class="text-button" type="submit">Find</button>{% if filter_text %}<a class="text-link" href="{{ url_for('job_progress', job_id=job.id) }}">Clear</a>{% endif %}</form>
+  <p class="muted summary-count">Showing {{ videos|length }} of {{ source.videos|length }} videos.</p>
   {% set opened_summary = namespace(value=false) %}
-  {% for video in source.videos %}
+  {% for video in videos %}
     {% if summaries.get(video.id) %}
       {% set saved = summaries.get(video.id) %}
       <details class="summary-card" {% if not opened_summary.value %}open{% set opened_summary.value = true %}{% endif %}>
@@ -18,6 +20,7 @@
       </details>
     {% endif %}
   {% endfor %}
+  {% if not videos %}<p class="muted">No video summaries match this search.</p>{% endif %}
   <p><a class="text-link" href="{{ url_for('archive_index') }}">Open archive ></a></p>
 </section>
 {% endblock %}
