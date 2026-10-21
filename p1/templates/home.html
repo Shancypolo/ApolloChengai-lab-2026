@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}PageOne — Read a video{% endblock %}
+{% block content %}
+<section class="home-hero">
+  <p class="kicker">A clearer way through the watch list</p>
+  <h1>Make time for<br><em>the main idea.</em></h1>
+  <p class="hero-copy">Bring a video or playlist. PageOne gathers the titles, then helps you read what matters.</p>
+  <form class="search-form" method="post" action="{{ url_for('inspect_source') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input id="source-url" name="source_url" type="url" placeholder="Paste a YouTube video or playlist link" required>
+    <button class="button button-dark" type="submit">Summarize ></button>
+  </form>
+  <p class="search-hint">Public YouTube links · English captions required for summaries</p>
+</section>
+{% if recent_sources %}
+<section class="recent-section">
+  <div class="section-heading"><div><p class="kicker">PICK UP WHERE YOU LEFT OFF</p><h2>Recently read</h2></div><a class="text-link" href="{{ url_for('archive_index') }}">Open archive ></a></div>
+  <div class="recent-list">
+    {% for source in recent_sources %}
+    <a class="recent-row" href="{{ url_for('archive_detail', source_key=source.source_key) }}"><span class="recent-type">{{ "PLAYLIST" if source.kind == "playlist" else "VIDEO" }}</span><span class="recent-title">{{ source.title }}</span><span class="recent-count">{{ source.videos|length }} videos</span><span>></span></a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

@@ -4,6 +4,7 @@ from pytubefix import Playlist
 
 
 def main():
+    """Print video IDs from a public playlist using pytubefix."""
     playlist_id = input("Public YouTube playlist ID: ").strip()
     if not playlist_id:
         raise SystemExit("Playlist ID cannot be blank.")

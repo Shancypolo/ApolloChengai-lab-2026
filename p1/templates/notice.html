@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}PageOne notice{% endblock %}
+{% block content %}
+<section class="notice notice-{{ tone|default('error') }} notice-page">{{ message }}</section>
+<p><a class="text-link" href="{{ url_for('home') }}">Return Home ></a></p>
+{% endblock %}

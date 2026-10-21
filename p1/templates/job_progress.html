@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ "Reading playlist" if job.type == "inspection" else "Summarizing videos" }} — PageOne{% endblock %}
+{% block refresh %}{% if job.status in ['queued', 'running'] %}<meta http-equiv="refresh" content="2;url={{ url_for('job_progress', job_id=job.id) }}">{% endif %}{% endblock %}
+{% block content %}
+<section class="progress-page">
+  <p class="kicker">{{ "LISTING TITLES" if job.type == "inspection" else "BATCH SUMMARY" }}</p>
+  <h1>{{ job.message }}</h1>
+  <p class="muted">{{ job.finished }}{% if job.total %} / {{ job.total }}{% endif %}{% if job.type == "inspection" and job.status in ['queued', 'running'] %} titles checked{% endif %}</p>
+  <p class="muted">This page refreshes while the local task runs.</p>
+  {% if job.status in ['complete', 'partial', 'error'] %}<p><a class="button button-dark" href="{{ url_for('job_progress', job_id=job.id) }}">Open results ></a></p>{% endif %}
+</section>
+{% endblock %}

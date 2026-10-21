@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ source.title }} — PageOne Archive{% endblock %}
+{% block content %}
+<section class="page-heading"><p class="kicker"><a href="{{ url_for('archive_index') }}">ARCHIVE</a> / {{ "PLAYLIST" if source.kind == "playlist" else "VIDEO" }}</p><h1>{{ source.title }}</h1><p><a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">Open source on YouTube ></a></p></section>
+<section class="archive-video-list"><div class="section-heading"><div><p class="kicker">SAVED VIDEO NOTES</p><h2>{{ source.videos|length }} titles</h2></div></div>
+{% set opened_archive_summary = namespace(value=false) %}
+{% for video in source.videos %}
+  {% set saved = summaries.get(video.id) %}
+  <details class="summary-card archive-summary" {% if saved and not opened_archive_summary.value %}open{% set opened_archive_summary.value = true %}{% elif not saved %}open{% endif %}><summary><span class="summary-title">{{ video.title }}</span><span class="summary-topics">{{ video.topic or "Other" }}</span><span class="summary-caret">＋</span></summary>
+    <div class="summary-body">{% if saved %}<p class="summary-prose">{{ saved.summary }}</p>{% for turn in saved.chat %}<div class="chat-turn"><p><strong>You</strong> {{ turn.question }}</p><p><strong>PageOne</strong> {{ turn.answer }}</p></div>{% endfor %}<div class="chat-box"><p class="kicker">ASK ABOUT THIS VIDEO</p><form class="chat-form" method="post" action="{{ url_for('chat_about_video', video_id=video.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input name="question" maxlength="1000" placeholder="Ask a follow-up question…" required><button class="button button-outline" type="submit">Ask ></button></form></div>{% else %}<p class="muted">This title is saved. Return to Home and submit this link to summarize it.</p>{% endif %}<div class="summary-meta">{{ video.published_at }} <span>·</span> {{ video.author }} <span>·</span> <a href="{{ video.url }}" target="_blank" rel="noopener noreferrer">Watch video ></a></div></div>
+  </details>
+{% endfor %}</section>
+{% endblock %}

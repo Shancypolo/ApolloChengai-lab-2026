@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ source.title }} — PageOne{% endblock %}
+{% block content %}
+<section class="result-panel">
+  <div class="result-heading">
+    <div><p class="kicker">{{ "PLAYLIST INDEX" if source.kind == "playlist" else "VIDEO INDEX" }}</p><h2>{{ source.title }}</h2><p class="muted">{{ source.videos|length }} videos{% if source.omitted_video_entries %} · {{ source.omitted_video_entries }} unavailable entries skipped{% endif %} · <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">Open on YouTube ></a></p></div>
+    <span class="result-stamp">{{ "CURATED LIST" if source.kind == "playlist" else "SINGLE VIDEO" }}</span>
+  </div>
+  {% if warning %}<div class="notice notice-error">{{ warning }}</div>{% endif %}
+  {% if not source.videos %}
+    <div class="notice notice-error">No available video titles were found in this source.</div>
+  {% else %}
+  <form method="post" action="{{ url_for('source_results', source_key=source.source_key) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="list-toolbar">
+      <div><p class="kicker">THE FULL LIST</p><span class="muted">Select videos to summarize</span></div>
+      <div class="list-controls">
+        <button class="text-button" type="submit" name="list_action" value="select_all">Select all</button>
+        <button class="text-button" type="submit" name="list_action" value="select_none">None</button>
+        <div class="sort-control"><span>Sort</span><select name="sort_by">
+          {% for value, label in [('original', 'Playlist order'), ('published_at', 'Publish date'), ('author', 'Author'), ('topic', 'Topic'), ('title', 'Title')] %}
+          <option value="{{ value }}" {% if sort_by == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select></div>
+        <button class="text-button" type="submit" name="list_action" value="sort">Apply</button>
+      </div>
+    </div>
+    <div class="filter-row"><input type="search" name="filter_text" value="{{ filter_text }}" placeholder="Find a title in this list…"><button class="text-button" type="submit" name="list_action" value="filter">Filter</button></div>
+    {% for video in source.videos if video.id in hidden_selected_ids %}<input type="hidden" name="video_ids" value="{{ video.id }}">{% endfor %}
+    <ol class="video-list">
+      {% for video in videos %}
+      {% set saved = summaries.get(video.id) %}
+      <li class="video-row">
+        <span class="video-check"><input type="checkbox" name="video_ids" value="{{ video.id }}" {% if video.id in selected_ids %}checked{% endif %}><span class="custom-check"></span></span>
+        <span class="video-index">{{ "%02d"|format(loop.index) }}</span>
+        <div class="video-copy"><a class="video-title" href="{{ video.url }}" target="_blank" rel="noopener noreferrer">{{ video.title }}</a><div class="video-meta"><span>{{ video.published_at }}</span><span>{{ video.author }}</span><span>{{ video.topic or "Other" }}</span></div></div>
+        <span class="video-state">{{ "SAVED" if saved else "NEW" }}</span>
+      </li>
+      {% endfor %}
+    </ol>
+    <div class="batch-actions"><div class="refresh-choice"><input type="checkbox" name="refresh" value="yes"><span>Re-summarize selected videos</span></div><button class="button button-dark" type="submit" name="list_action" value="summarize">Summarize selected ></button></div>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

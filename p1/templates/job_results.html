@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Summary results — PageOne{% endblock %}
+{% block content %}
+<section class="batch-result">
+  <div class="progress-top"><span class="kicker">{{ "BATCH COMPLETE" if job.status == "complete" else "BATCH COMPLETE WITH ISSUES" }}</span><span>{{ job.succeeded }} / {{ job.total }} ready</span></div>
+  {% if job.failed %}<div class="notice notice-error"><strong>{{ job.failed|length }} video(s) need attention.</strong><ul>{% for failed in job.failed %}<li>{{ failed.title }} — {{ failed.message }}</li>{% endfor %}</ul></div>{% endif %}
+  {% set opened_summary = namespace(value=false) %}
+  {% for video in source.videos %}
+    {% if summaries.get(video.id) %}
+      {% set saved = summaries.get(video.id) %}
+      <details class="summary-card" {% if not opened_summary.value %}open{% set opened_summary.value = true %}{% endif %}>
+        <summary><span class="summary-title">{{ video.title }}</span><span class="summary-topics">{{ saved.topics|join(" · ") if saved.topics else "Other" }}</span><span class="summary-caret">＋</span></summary>
+        <div class="summary-body"><p class="summary-prose">{{ saved.summary }}</p><div class="summary-meta">{{ video.published_at }} <span>·</span> {{ video.author }} <span>·</span> <a href="{{ video.url }}" target="_blank" rel="noopener noreferrer">Watch video ></a></div>
+          <div class="chat-box"><p class="kicker">ASK ABOUT THIS VIDEO</p><div class="chat-history">{% for turn in saved.chat %}<div class="chat-turn"><p><strong>You</strong> {{ turn.question }}</p><p><strong>PageOne</strong> {{ turn.answer }}</p></div>{% endfor %}</div>
+            <form class="chat-form" method="post" action="{{ url_for('chat_about_video', video_id=video.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input name="question" maxlength="1000" placeholder="Ask a follow-up question…" required><button class="button button-outline" type="submit">Ask ></button></form>
+          </div>
+        </div>
+      </details>
+    {% endif %}
+  {% endfor %}
+  <p><a class="text-link" href="{{ url_for('archive_index') }}">Open archive ></a></p>
+</section>
+{% endblock %}
