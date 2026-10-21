@@ -134,7 +134,7 @@ Update this section only with commands actually run. Current evidence for this r
 - Local Chromium visual flow: passed with fake source, topic, summary, and chat services. It exercised title listing, sort/filter, all/none/individual selection, summary search, batch results, chat, archive search, settings, and no-script/no-ARIA markup, with no horizontal overflow at 280×940, 320×940, 430×1100, 844×390, 1365×768, and 3440×1100. Screenshots were visually inspected in `/tmp/pageone-visual`.
 - CLI startup smoke test: passed; `python app.py` served the home page over loopback with a temporary data directory, session meter, and no script tag.
 - Live OpenAI summary diagnostic: one GPT-6 Luna/high request succeeded with 190 input, 50 output, and 0 reasoning tokens; reported known token-rate cost was $0.00004400. No transcript or summary text was printed.
-- Live OpenAI title-topic diagnostic: one GPT-6 Luna/high request succeeded with two synthetic titles; `Video 2` was labeled `Other`, 191 total tokens were reported, and known cost was $0.00004110. No real video titles or transcript were sent.
+- Live OpenAI title-topic diagnostic: after the final title-only prompt update, one GPT-6 Luna/high request succeeded with two synthetic titles; `Video 2` was labeled `Other`, 211 total tokens were reported, and known cost was $0.00003710. No real video titles or transcript were sent.
 - Live YouTube source-only diagnostic: failed; `yt-dlp` could not retrieve the sample public playlist in this environment. The earlier detailed check identified an outbound proxy HTTP 403. No OpenAI quota was used by the source-only attempt.
 - Cloud browser: not available in the current tool environment; do not call local Chromium results cloud-browser results.
 
