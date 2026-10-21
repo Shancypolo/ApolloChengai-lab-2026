@@ -7,15 +7,16 @@ Some features below probably wont make it to the final product.
 5. support multiple playlists
 6. automatic fetch new videos added to playlist and summarize on startup
 
-create a web app using python, Flask + Jinja2 + HTMX + css. 
+create a web app using python, Flask + Jinja2 + HTMX + css. api is in env var OPENAI_API_KEY
 goal: summarize youtube playlists and youtube videos. features include list all video titles from the playlist. sort or group videos by publish date, author, and topic
 2. optionally extend chats for more information about a video
 3. customizable summary preferences
 4. store past video summary of playlist
 
 visuals: a collapsable sidebar with pages settings, archive, and home.
-    Home: homepage 
-
+    Home: interface like google search engine. center bar prompts for playlist link or video link. after press enter or press summarize jumps to interface that shows loading/generating.  after finish load show a multiple choice list of all videos' titles in that playlist. click on something and it opens that video's link. app saves and reads list of video ids and playlist ids on local txt/csv/json file. user choose all or none or some videos to batch summarize. show loading, then show collapsed list of summaries where users can easily find summary of a video out of hundreds.
+settings: ai summmary preferences
+archive: easily accessable past playlists, videos, and summaries. 
 
 code must maximize readability for absolute beginner coders. use object oriented and functional programming paradigms. prefer functional programming over object oriented but you may use both. write a vs code readable comment under each function and class that explains usage and method with minimal words. write atleast 2 python files. locate html files outside of python files instead of embedding it. maximize flexibility on windows and mac newest version. use browser, computer control, cloud browser and subagents to visually test on extreme aspect ratios for correct display and correct functionality.## 5. Engineering constraints
 - Use functional programming for transformations, validation, normalization, and rendering.
@@ -34,3 +35,8 @@ code must maximize readability for absolute beginner coders. use object oriented
 - Keep offline tests network-free. Keep live API diagnostics separate and clearly identified because they consume quota.
 - Cover dynamic questions, preference persistence, no-repeat behavior, early search, ambiguous-input progression, tool configuration, source allowlisting, HTTPS validation, malformed responses, injection handling, blank input, EOF, Unicode, missing credentials, output contract, and nesting depth.
 - Report failures and fixes precisely. Do not claim a check passed unless it ran successfully.
+- outsource as much functions to ai as possible
+- search online 
+- follow online industry guides to anti ai jailbraking and high quality prompts.
+- folow industry guides to uncertain topics.
+- design code tests and easily debuggable error reporting in a log file.
