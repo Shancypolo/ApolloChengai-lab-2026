@@ -66,6 +66,11 @@ def assert_no_embedded_scripts_or_aria(page) -> None:
     assert re.search(r"\srole\s*=", page_markup, re.IGNORECASE) is None
 
 
+def assert_single_surface(page) -> None:
+    """Reject visible images, sidebars, and floating notice windows."""
+    assert page.locator("img, .sidebar, dialog, .failure-shade").count() == 0
+
+
 def main() -> None:
     """Launch an isolated fake app and check interactions and extreme widths."""
     try:
@@ -112,24 +117,33 @@ def main() -> None:
                 launch_options["executable_path"] = browser_path
             browser = playwright.chromium.launch(**launch_options)
             page = browser.new_page(viewport={"width": 1365, "height": 768})
+            browser_errors = []
+            page.on("pageerror", lambda error: browser_errors.append(str(error)))
+            page.on("console", lambda message: browser_errors.append(message.text) if message.type == "error" else None)
             base_url = f"http://127.0.0.1:{server.server_port}"
             page.goto(base_url, wait_until="networkidle")
+            assert page.url == base_url + "/"
+            assert page.title() == "PageOne"
             assert_no_embedded_scripts_or_aria(page)
+            assert_single_surface(page)
             page.screenshot(path=str(screenshots_directory / "home-wide.png"), full_page=True)
             page.locator("#source-url").fill("https://example.com/watch?v=GmBG-26_Izw")
             page.locator(".search-form button").click()
-            page.locator(".failure-dialog").wait_for()
-            page.screenshot(path=str(screenshots_directory / "error-popup-wide.png"), full_page=True)
-            page.locator(".failure-dialog a").click()
-            page.locator('.sidebar-nav a[href="/archive"]').click()
+            page.locator(".failure-notice").wait_for()
+            assert_single_surface(page)
+            page.screenshot(path=str(screenshots_directory / "error-notice-wide.png"), full_page=True)
+            page.locator(".failure-notice a").click()
+            page.locator('.site-nav a[href="/archive"]').click()
             page.get_by_text("Nothing saved yet").wait_for()
+            assert_single_surface(page)
             page.screenshot(path=str(screenshots_directory / "archive-empty-wide.png"), full_page=True)
-            page.locator('.sidebar-nav a[href="/settings"]').click()
+            page.locator('.site-nav a[href="/settings"]').click()
+            assert_single_surface(page)
             page.screenshot(path=str(screenshots_directory / "settings-wide.png"), full_page=True)
-            page.locator('.sidebar-nav a[href="/"]').click()
-            for width, height in ((280, 940), (320, 940), (430, 1100), (844, 390), (1365, 768), (3440, 1100)):
+            page.locator('.site-nav a[href="/"]').click()
+            for width, height in ((280, 940), (320, 940), (430, 1100), (844, 390), (1365, 768), (1600, 1000), (3440, 1100)):
                 assert_no_horizontal_overflow(page, width, height)
-                if width in (280, 3440):
+                if width in (280, 1600, 3440):
                     page.screenshot(path=str(screenshots_directory / f"home-{width}.png"), full_page=True)
 
             page.locator("#source-url").fill("https://www.youtube.com/playlist?list=PLVANSOs5ny50")
@@ -138,10 +152,11 @@ def main() -> None:
             page.locator("h2").filter(has_text="Lectures on evidence and uncertainty").wait_for()
             assert page.locator(".video-row").count() == 3
             assert_no_embedded_scripts_or_aria(page)
+            assert_single_surface(page)
             page.screenshot(path=str(screenshots_directory / "results-wide.png"), full_page=True)
-            for width, height in ((280, 940), (320, 940), (430, 1100), (844, 390), (1365, 768), (3440, 1100)):
+            for width, height in ((280, 940), (320, 940), (430, 1100), (844, 390), (1365, 768), (1600, 1000), (3440, 1100)):
                 assert_no_horizontal_overflow(page, width, height)
-                if width in (280, 3440):
+                if width in (280, 1600, 3440):
                     page.screenshot(path=str(screenshots_directory / f"results-{width}.png"), full_page=True)
 
             page.locator("select[name=sort_by]").select_option("author")
@@ -183,9 +198,8 @@ def main() -> None:
             assert_no_embedded_scripts_or_aria(page)
 
             page.set_viewport_size({"width": 320, "height": 940})
-            page.locator(".sidebar-toggle summary").click()
-            assert page.locator(".sidebar-toggle[open]").count() == 1
-            page.locator('.sidebar-nav a[href="/archive"]').click()
+            assert page.locator(".sidebar").count() == 0
+            page.locator('.site-nav a[href="/archive"]').click()
             page.locator("h1").filter(has_text="Archive").wait_for()
             assert page.get_by_text("Lectures on evidence and uncertainty").count() >= 1
             page.screenshot(path=str(screenshots_directory / "archive-mobile.png"), full_page=True)
@@ -209,8 +223,7 @@ def main() -> None:
             assert page.locator(".archive-summary").count() == 3
             page.screenshot(path=str(screenshots_directory / "archive-detail-mobile.png"), full_page=True)
             assert_no_horizontal_overflow(page, 320, 940)
-            page.locator(".sidebar-toggle summary").click()
-            page.locator('.sidebar-nav a[href="/settings"]').click()
+            page.locator('.site-nav a[href="/settings"]').click()
             page.locator("h1").filter(has_text="Settings").wait_for()
             page.locator("#summary-preferences").fill("Keep uncertainty visible.")
             page.locator("button[type=submit]").click()
@@ -220,8 +233,10 @@ def main() -> None:
             page.set_viewport_size({"width": 3440, "height": 1100})
             page.screenshot(path=str(screenshots_directory / "settings-ultrawide.png"), full_page=True)
             assert_no_horizontal_overflow(page, 3440, 1100)
-            page.locator('.sidebar-nav a[href="/archive"]').click()
+            page.locator('.site-nav a[href="/archive"]').click()
             page.screenshot(path=str(screenshots_directory / "archive-ultrawide.png"), full_page=True)
+            page.set_viewport_size({"width": 1600, "height": 1000})
+            page.screenshot(path=str(screenshots_directory / "archive-1600.png"), full_page=True)
             page.locator(".archive-row").first.click()
             page.screenshot(path=str(screenshots_directory / "archive-detail-ultrawide.png"), full_page=True)
             assert_no_horizontal_overflow(page, 3440, 1100)
@@ -232,13 +247,14 @@ def main() -> None:
                 raise ConnectionError("synthetic offline service")
 
             app.config["TOPIC_FUNCTION"] = offline_topic_function
-            page.locator('.sidebar-nav a[href="/"]').click()
+            page.locator('.site-nav a[href="/"]').click()
             page.locator("#source-url").fill("https://www.youtube.com/playlist?list=PLVANSOs5ny50")
             page.locator(".search-form button").click()
-            page.locator(".failure-dialog").wait_for(timeout=15_000)
-            assert "Connection unavailable" in page.locator(".failure-dialog").inner_text()
-            page.screenshot(path=str(screenshots_directory / "offline-api-popup-mobile.png"), full_page=True)
+            page.locator(".failure-notice").wait_for(timeout=15_000)
+            assert "Connection unavailable" in page.locator(".failure-notice").inner_text()
+            page.screenshot(path=str(screenshots_directory / "offline-api-notice-mobile.png"), full_page=True)
             assert "ConnectionError" in (Path(temporary_directory.name) / "pageone.log").read_text(encoding="utf-8")
+            assert browser_errors == [], browser_errors
             browser.close()
         print(f"Browser checks passed. Screenshots: {screenshots_directory}")
     finally:

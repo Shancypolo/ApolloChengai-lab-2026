@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Video question — PageOne{% endblock %}
 {% block content %}
+{% include "error_notice.html" %}
 <section class="page-heading"><p class="kicker">VIDEO FOLLOW-UP</p><h1>Your question</h1></section>
 <section class="settings-panel">
   <div class="chat-turn chat-{{ tone|default('success') }}"><p><strong>You</strong> {{ question }}</p><p><strong>PageOne</strong> {{ answer }}</p></div>
   <p><a class="text-link" href="{{ url_for('archive_index') }}">Open archive ></a></p>
 </section>
-{% include "error_popup.html" %}
 {% endblock %}

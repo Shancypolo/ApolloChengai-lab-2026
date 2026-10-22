@@ -42,7 +42,7 @@ def main() -> None:
                     with urlopen(f"http://127.0.0.1:{port}/", timeout=1) as response:
                         page = response.read().decode("utf-8")
                         assert response.status == 200
-                        assert '<dialog open class="failure-dialog">' in page
+                        assert 'class="failure-notice"' in page
                         assert "PageOne cannot start" in page
                         assert "<script" not in page
                         break
@@ -70,7 +70,7 @@ def main() -> None:
                         page = response.read().decode("utf-8")
                         assert response.status == 200
                         assert 'class="hero-logo"' in page
-                        assert '<dialog open class="failure-dialog">' not in page
+                        assert 'class="failure-notice"' not in page
                         break
                 except OSError:
                     if attempt == 39:
@@ -79,7 +79,7 @@ def main() -> None:
         finally:
             normal_process.terminate()
             normal_process.communicate(timeout=5)
-        print("Startup smoke passed: missing-package popup, terminal, log, and normal launch.")
+        print("Startup smoke passed: missing-package notice, terminal, log, and normal launch.")
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ## PageOne
 
 - Local Python Flask app with Jinja2 pages and external CSS; the interface has no JavaScript.
-- A collapsible Home, Archive, and Settings sidebar; a fixed session token and USD-cost meter sits at the bottom left.
-- A two-color 21:9 engraved `P. 1` masthead, heavy editorial rules, and locally bundled OFL Bodoni Moda and Cinzel fonts; Home, Archive, and Settings keep visible copy minimal.
-- Viewport-scaled masthead and search; full-width archive, settings, and results; wide-screen split layouts for settings and saved video lists.
-- Script-free in-page failure notices with rotating log and terminal diagnostics; `run.py` also shows a local notice when required packages are missing.
+- A horizontal Home, Archive, and Settings navigation; a fixed session token and USD-cost meter sits at the bottom left.
+- A text-only `P. 1` masthead, single white surface, generous open space, and horizontal editorial rules; Home, Archive, and Settings keep visible copy minimal.
+- Viewport-scaled masthead and search, wide archive and result lists, and readable notes on narrow screens.
+- Script-free inline failure notices with rotating log and terminal diagnostics; `run.py` also shows a local notice when required packages are missing.
 - Archive index search matches source and video titles in Python.
 - HTTPS YouTube video and playlist links are checked against an explicit host and ID allowlist.
 - Playlist titles load before summaries. GPT-6 Luna assigns topic labels from title strings only; uninformative titles receive `Other`.

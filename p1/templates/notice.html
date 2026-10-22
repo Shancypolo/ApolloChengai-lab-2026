@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}PageOne notice{% endblock %}
 {% block content %}
-{% set error_popup_message = message %}
+{% set error_notice_message = message %}
 {% set dismiss_url = url_for('home') %}
-{% include "error_popup.html" %}
+{% include "error_notice.html" %}
 {% endblock %}

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Settings — PageOne{% endblock %}
 {% block content %}
+{% include "error_notice.html" %}
 <section class="page-heading editorial-heading"><h1>Settings</h1></section>
 <section class="settings-panel">
   <form method="post" action="{{ url_for('settings') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -9,5 +10,4 @@
     <div class="settings-actions"><button class="button button-dark" type="submit" title="Save preferences">✓</button>{% if message %}<span class="settings-feedback {% if tone == 'error' %}is-error{% endif %}" title="{{ message }}">{% if tone == 'error' %}!{% else %}✓{% endif %}</span>{% endif %}</div>
   </form>
 </section>
-{% include "error_popup.html" %}
 {% endblock %}

@@ -156,7 +156,7 @@ class PageOneCoreTests(unittest.TestCase):
             with self.assertRaisesRegex(SourceError, "Install"):
                 fetch_source("video", "GmBG-26_Izw")
 
-    def test_unexpected_request_uses_popup_and_safe_log(self):
+    def test_unexpected_request_uses_inline_notice_and_safe_log(self):
         """Show a notice while omitting exception text from local diagnostics."""
         with tempfile.TemporaryDirectory() as folder:
             app = create_app(folder)
@@ -168,7 +168,7 @@ class PageOneCoreTests(unittest.TestCase):
 
             response = app.test_client().get("/failure-check")
             self.assertEqual(response.status_code, 500)
-            self.assertIn(b'<dialog open class="failure-dialog">', response.data)
+            self.assertIn(b'class="failure-notice"', response.data)
             self.assertNotIn(b"private example payload", response.data)
             log_text = (Path(folder) / "pageone.log").read_text(encoding="utf-8")
             self.assertIn("RuntimeError", log_text)

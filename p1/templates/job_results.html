@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Summary results — PageOne{% endblock %}
 {% block content %}
+{% include "error_notice.html" %}
 <section class="batch-result">
   <div class="progress-top"><span class="kicker">{{ "BATCH COMPLETE" if job.status == "complete" else "BATCH COMPLETE WITH ISSUES" }}</span><span>{{ job.succeeded }} / {{ job.total }} ready</span></div>
   {% if job.failed %}<div class="notice notice-error"><strong>{{ job.failed|length }} video(s) need attention.</strong><ul>{% for failed in job.failed %}<li>{{ failed.title }} — {{ failed.message }}</li>{% endfor %}</ul></div>{% endif %}
@@ -23,5 +24,4 @@
   {% if not videos %}<p class="muted">No video summaries match this search.</p>{% endif %}
   <p><a class="text-link" href="{{ url_for('archive_index') }}">Open archive ></a></p>
 </section>
-{% include "error_popup.html" %}
 {% endblock %}

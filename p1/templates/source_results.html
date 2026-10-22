@@ -1,19 +1,19 @@
 {% extends "base.html" %}
 {% block title %}{{ source.title }} — PageOne{% endblock %}
 {% block content %}
+{% include "error_notice.html" %}
 <section class="result-panel">
   <div class="result-heading">
     <div><p class="kicker">{{ "PLAYLIST INDEX" if source.kind == "playlist" else "VIDEO INDEX" }}</p><h2>{{ source.title }}</h2><p class="muted">{{ source.videos|length }} videos{% if source.omitted_video_entries %} · {{ source.omitted_video_entries }} unavailable entries skipped{% endif %} · <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">Open on YouTube ></a></p></div>
-    <span class="result-stamp">{{ "CURATED LIST" if source.kind == "playlist" else "SINGLE VIDEO" }}</span>
+    <span class="result-stamp">{{ "PLAYLIST" if source.kind == "playlist" else "VIDEO" }}</span>
   </div>
-  {% if warning %}<div class="notice notice-error">{{ warning }}</div>{% endif %}
   {% if not source.videos %}
     <div class="notice notice-error">No available video titles were found in this source.</div>
   {% else %}
   <form method="post" action="{{ url_for('source_results', source_key=source.source_key) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="list-toolbar">
-      <div><p class="kicker">THE FULL LIST</p><span class="muted">Select videos to summarize</span></div>
+      <div><span class="muted">Select videos to summarize</span></div>
       <div class="list-controls">
         <button class="text-button" type="submit" name="list_action" value="select_all">Select all</button>
         <button class="text-button" type="submit" name="list_action" value="select_none">None</button>
@@ -42,5 +42,4 @@
   </form>
   {% endif %}
 </section>
-{% include "error_popup.html" %}
 {% endblock %}

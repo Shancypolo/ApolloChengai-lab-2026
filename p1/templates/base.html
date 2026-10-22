@@ -5,23 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}PageOne{% endblock %}</title>
   {% block refresh %}{% endblock %}
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/pageone-wordmark.png') }}">
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/pageone.css') }}">
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar">
-      <details class="sidebar-toggle"><summary title="Toggle sidebar"><span class="toggle-lines"></span></summary></details>
-      <nav class="sidebar-nav">
-        <a href="{{ url_for('home') }}" class="nav-link nav-home {% if request.endpoint == 'home' %}is-current{% endif %}" title="Home"><span class="nav-glyph">⌂</span></a>
-        <a href="{{ url_for('archive_index') }}" class="nav-link nav-archive {% if request.endpoint in ['archive_index', 'archive_detail'] %}is-current{% endif %}" title="Archive"><span class="nav-glyph">▤</span></a>
-        <a href="{{ url_for('settings') }}" class="nav-link nav-settings {% if request.endpoint == 'settings' %}is-current{% endif %}" title="Settings"><span class="nav-glyph">⚙︎</span></a>
+    <header class="site-header">
+      <nav class="site-nav">
+        <a href="{{ url_for('home') }}" class="nav-link {% if request.endpoint == 'home' %}is-current{% endif %}">Home</a>
+        <a href="{{ url_for('archive_index') }}" class="nav-link {% if request.endpoint in ['archive_index', 'archive_detail'] %}is-current{% endif %}">Archive</a>
+        <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint == 'settings' %}is-current{% endif %}">Settings</a>
       </nav>
-    </aside>
+      <a class="site-mark" href="{{ url_for('home') }}">P. 1</a>
+    </header>
     <main class="main-content">
-      <div class="editorial-rule"></div>
       {% block content %}{% endblock %}
-      <div class="editorial-rule editorial-rule-bottom"></div>
     </main>
   </div>
   <aside class="usage-meter" title="Session tokens: input, cached input, output, reasoning; known USD cost">

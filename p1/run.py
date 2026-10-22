@@ -17,9 +17,6 @@ REQUIRED_MODULES = ("flask", "openai", "yt_dlp")
 STARTUP_FILES = {
     "/": (APP_DIRECTORY / "templates" / "startup_error.html", "text/html; charset=utf-8"),
     "/static/css/pageone.css": (APP_DIRECTORY / "static" / "css" / "pageone.css", "text/css; charset=utf-8"),
-    "/static/images/pageone-wordmark.png": (APP_DIRECTORY / "static" / "images" / "pageone-wordmark.png", "image/png"),
-    "/static/fonts/bodonimoda-BodoniModa-opsz,wght.ttf": (APP_DIRECTORY / "static" / "fonts" / "bodonimoda-BodoniModa-opsz,wght.ttf", "font/ttf"),
-    "/static/fonts/cinzel-Cinzel-wght.ttf": (APP_DIRECTORY / "static" / "fonts" / "cinzel-Cinzel-wght.ttf", "font/ttf"),
 }
 
 

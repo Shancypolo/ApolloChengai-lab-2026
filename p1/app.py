@@ -278,7 +278,7 @@ def render_source_results(
         sort_by=sort_by if sort_by in VIDEO_SORT_OPTIONS else "original",
         filter_text=filter_text,
         warning=warning,
-        error_popup_message=warning,
+        error_notice_message=warning,
         dismiss_url=url_for("source_results", source_key=source["source_key"]),
     )
 
@@ -675,7 +675,7 @@ def create_app(
                 summaries=archive["summaries"],
                 videos=filter_summary_videos(source.get("videos", []), archive["summaries"], filter_text),
                 filter_text=filter_text,
-                error_popup_message="Some videos could not be summarized." if job["failed"] and request.args.get("hide_notice") != "1" else "",
+                error_notice_message="Some videos could not be summarized." if job["failed"] and request.args.get("hide_notice") != "1" else "",
                 dismiss_url=url_for("job_progress", job_id=job_id, hide_notice=1),
             )
         return render_template("job_progress.html", job=job)
@@ -728,7 +728,7 @@ def create_app(
             preferences=archive["summary_preferences"] or DEFAULT_PREFERENCES,
             message=message,
             tone=tone,
-            error_popup_message=message if tone == "error" else "",
+            error_notice_message=message if tone == "error" else "",
             dismiss_url=url_for("settings"),
         )
 
@@ -743,7 +743,7 @@ def create_app(
         question = request.form.get("question", "").strip()
         if not question or len(question) > MAX_QUESTION_LENGTH:
             safe_log(app, "A follow-up question failed validation")
-            return render_template("chat_answer.html", question=question, answer="Enter a question up to 1,000 characters.", tone="error", error_popup_message="Enter a question up to 1,000 characters.", dismiss_url=url_for("archive_index"))
+            return render_template("chat_answer.html", question=question, answer="Enter a question up to 1,000 characters.", tone="error", error_notice_message="Enter a question up to 1,000 characters.", dismiss_url=url_for("archive_index"))
         try:
             transcript = app.config["TRANSCRIPT_FETCHER"](video_id)
             session_id = session["usage_session_id"]
@@ -767,7 +767,7 @@ def create_app(
         except (SourceError, SummaryError) as error:
             safe_log(app, f"Video {video_id} follow-up failed", error)
             message = failure_notice(error)
-            return render_template("chat_answer.html", question=question, answer=message, tone="error", error_popup_message=message, dismiss_url=url_for("archive_index"))
+            return render_template("chat_answer.html", question=question, answer=message, tone="error", error_notice_message=message, dismiss_url=url_for("archive_index"))
         except Exception as error:
             safe_log(app, f"Video {video_id} follow-up failed", error)
             return render_template(
@@ -775,7 +775,7 @@ def create_app(
                 question=question,
                 answer=failure_notice(error),
                 tone="error",
-                error_popup_message=failure_notice(error),
+                error_notice_message=failure_notice(error),
                 dismiss_url=url_for("archive_index"),
             )
 
