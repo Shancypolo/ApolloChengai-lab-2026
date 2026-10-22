@@ -2,6 +2,8 @@
 
 - Local Python Flask app with Jinja2 pages and external CSS; the interface has no JavaScript.
 - A collapsible Home, Archive, and Settings sidebar; a fixed session token and USD-cost meter sits at the bottom left.
+- Engraved PageOne logo, heavy editorial rules, and locally bundled OFL Bodoni Moda and Cinzel fonts; Home, Archive, and Settings keep visible copy minimal.
+- Archive index search matches source and video titles in Python.
 - HTTPS YouTube video and playlist links are checked against an explicit host and ID allowlist.
 - Playlist titles load before summaries. GPT-6 Luna assigns topic labels from title strings only; uninformative titles receive `Other`.
 - Users can sort by playlist order, title, publish date, author, or topic, filter the title list, and select all, none, or individual videos.

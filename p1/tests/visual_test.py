@@ -55,7 +55,7 @@ def assert_no_horizontal_overflow(page, width: int, height: int) -> None:
     for element in page.locator("body *").all():
         bounds = element.bounding_box()
         if bounds and (bounds["x"] < -1 or bounds["x"] + bounds["width"] > width + 2):
-            raise AssertionError(f"Horizontal overflow at {width}x{height}.")
+            raise AssertionError(f"Horizontal overflow at {width}x{height}: {element.get_attribute('class')} {bounds}.")
 
 
 def assert_no_embedded_scripts_or_aria(page) -> None:
@@ -116,6 +116,12 @@ def main() -> None:
             page.goto(base_url, wait_until="networkidle")
             assert_no_embedded_scripts_or_aria(page)
             page.screenshot(path=str(screenshots_directory / "home-wide.png"), full_page=True)
+            page.locator('.sidebar-nav a[href="/archive"]').click()
+            page.get_by_text("Nothing saved yet").wait_for()
+            page.screenshot(path=str(screenshots_directory / "archive-empty-wide.png"), full_page=True)
+            page.locator('.sidebar-nav a[href="/settings"]').click()
+            page.screenshot(path=str(screenshots_directory / "settings-wide.png"), full_page=True)
+            page.locator('.sidebar-nav a[href="/"]').click()
             for width, height in ((280, 940), (320, 940), (430, 1100), (844, 390), (1365, 768), (3440, 1100)):
                 assert_no_horizontal_overflow(page, width, height)
                 if width in (280, 3440):
@@ -172,12 +178,22 @@ def main() -> None:
             assert_no_embedded_scripts_or_aria(page)
 
             page.set_viewport_size({"width": 320, "height": 940})
-            page.locator(".sidebar-summary").click()
-            assert page.locator("#sidebar[open]").count() == 1
+            page.locator(".sidebar-toggle summary").click()
+            assert page.locator(".sidebar-toggle[open]").count() == 1
             page.locator('.sidebar-nav a[href="/archive"]').click()
             page.locator("h1").filter(has_text="Archive").wait_for()
             assert page.get_by_text("Lectures on evidence and uncertainty").count() >= 1
             page.screenshot(path=str(screenshots_directory / "archive-mobile.png"), full_page=True)
+            page.locator("#archive-search").fill("no matching source")
+            page.locator(".archive-search button").click()
+            page.get_by_text("Nothing saved yet").wait_for()
+            page.locator("#archive-search").fill("")
+            page.locator(".archive-search button").click()
+            page.locator("#archive-search").fill("first question")
+            page.locator(".archive-search button").click()
+            assert page.locator(".archive-row").count() == 1
+            page.locator("#archive-search").fill("")
+            page.locator(".archive-search button").click()
             page.locator(".archive-row").first.click()
             page.locator(".summary-prose").first.wait_for()
             page.get_by_text("How certain is that conclusion?").wait_for()
@@ -186,14 +202,14 @@ def main() -> None:
             assert page.locator(".archive-summary").count() == 1
             page.locator(".summary-filter a").click()
             assert page.locator(".archive-summary").count() == 3
-            assert_no_horizontal_overflow(page, 320, 940)
             page.screenshot(path=str(screenshots_directory / "archive-detail-mobile.png"), full_page=True)
-            page.locator(".sidebar-summary").click()
+            assert_no_horizontal_overflow(page, 320, 940)
+            page.locator(".sidebar-toggle summary").click()
             page.locator('.sidebar-nav a[href="/settings"]').click()
             page.locator("h1").filter(has_text="Settings").wait_for()
             page.locator("#summary-preferences").fill("Keep uncertainty visible.")
             page.locator("button[type=submit]").click()
-            page.get_by_text("Summary preferences saved.").wait_for()
+            page.locator('.settings-feedback[title="Summary preferences saved."]').wait_for()
             page.screenshot(path=str(screenshots_directory / "settings-mobile.png"), full_page=True)
             assert_no_horizontal_overflow(page, 320, 940)
             browser.close()

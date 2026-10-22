@@ -478,7 +478,7 @@ class PageOneRouteTests(unittest.TestCase):
         meter = self.app.config["USAGE"].snapshot(self.session_id)
         self.assertEqual(meter["api_calls"], 3)
         self.assertEqual(meter["total_tokens"], 3300)
-        self.assertIn(b"Known cost", response.data)
+        self.assertIn(b"known USD cost", response.data)
 
     def test_csrf_blank_preferences_and_empty_selection_are_reported(self):
         """Reject missing form tokens and explain blank preference or selection."""
@@ -495,7 +495,9 @@ class PageOneRouteTests(unittest.TestCase):
     def test_usage_meter_is_present_without_script_or_aria_markup(self):
         """Keep the global meter on pages with no script or ARIA markup."""
         response = self.client.get("/")
-        self.assertIn(b"SESSION \xc2\xb7 GPT-6 LUNA", response.data)
+        self.assertIn(b'class="usage-meter"', response.data)
+        self.assertIn(b"$0.00000000", response.data)
+        self.assertNotIn(b"$$", response.data)
         self.assertNotIn(b"<script", response.data.lower())
         self.assertNotIn(b"aria-", response.data.lower())
         self.assertEqual(response.headers["Content-Security-Policy"].split("script-src ")[1].split(";")[0], "'none'")

@@ -1,15 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Settings — PageOne{% endblock %}
 {% block content %}
-<section class="page-heading"><p class="kicker">SHAPE YOUR READING NOTES</p><h1>Settings</h1><p>Use this preference each time you make a new summary.</p></section>
+<section class="page-heading editorial-heading"><h1>Settings</h1></section>
 <section class="settings-panel">
-  {% if message %}<div class="notice notice-{{ tone }}">{{ message }}</div>{% endif %}
   <form method="post" action="{{ url_for('settings') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <p class="field-title">AI summary preferences</p>
+    <label class="field-title" for="summary-preferences">AI summary preferences</label>
     <textarea id="summary-preferences" name="summary_preferences" rows="8" maxlength="2000" required>{{ preferences }}</textarea>
-    <p class="field-help">Preferences guide the structure and level of detail. The video transcript remains the only source for factual claims.</p>
-    <div class="settings-actions"><span class="muted">Up to 2,000 characters</span><button class="button button-dark" type="submit">Save preferences ></button></div>
+    <div class="settings-actions"><button class="button button-dark" type="submit" title="Save preferences">✓</button>{% if message %}<span class="settings-feedback {% if tone == 'error' %}is-error{% endif %}" title="{{ message }}">{% if tone == 'error' %}!{% else %}✓{% endif %}</span>{% endif %}</div>
   </form>
-  <div class="default-note"><span class="kicker">STARTING POINT</span><p>“Write a concise academic summary in coherent paragraphs. Explain the central thesis, key arguments, evidence, and limitations.”</p></div>
 </section>
 {% endblock %}

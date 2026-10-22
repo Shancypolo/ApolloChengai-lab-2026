@@ -212,6 +212,19 @@ def filter_summary_videos(
     return matches
 
 
+def archive_rows(sources: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+    """Find saved sources by source or video title before rendering HTML."""
+    search_text = query.strip().casefold()[:MAX_FILTER_LENGTH]
+    rows = []
+    for source in sources:
+        videos = source.get("videos", [])
+        searchable = " ".join([str(source.get("title", "")), *[str(video.get("title", "")) for video in videos]])
+        if search_text and search_text not in searchable.casefold():
+            continue
+        rows.append(source)
+    return rows
+
+
 def render_source_results(
     source: dict[str, Any],
     summaries: dict[str, Any],
@@ -628,7 +641,8 @@ def create_app(
         """Show saved playlists and videos in newest-first order."""
         archive = app.config["STORE"].read()
         sources = sorted(archive["sources"].values(), key=lambda item: item.get("updated_at", ""), reverse=True)
-        return render_template("archive.html", sources=sources, summaries=archive["summaries"])
+        query = request.args.get("q", "")[:MAX_FILTER_LENGTH]
+        return render_template("archive.html", sources=archive_rows(sources, query), query=query)
 
     @app.get("/archive/<path:source_key>")
     def archive_detail(source_key: str):

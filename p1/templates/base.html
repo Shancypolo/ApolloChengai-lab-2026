@@ -5,33 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}PageOne{% endblock %}</title>
   {% block refresh %}{% endblock %}
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/pageone-monogram.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/pageone.css') }}">
 </head>
 <body>
   <div class="app-shell">
-    <details class="sidebar" id="sidebar">
-      <summary class="sidebar-summary"><span class="wordmark-mark">P.</span><span class="sidebar-label">PageOne</span><span class="sidebar-menu-icon">☰</span></summary>
+    <aside class="sidebar">
+      <details class="sidebar-toggle"><summary title="Toggle sidebar"><span class="toggle-lines"></span></summary></details>
       <nav class="sidebar-nav">
-        <a href="{{ url_for('home') }}" class="nav-link {% if request.endpoint == 'home' %}is-current{% endif %}"><span class="nav-glyph">⌂</span><span>Home</span></a>
-        <a href="{{ url_for('archive_index') }}" class="nav-link {% if request.endpoint in ['archive_index', 'archive_detail'] %}is-current{% endif %}"><span class="nav-glyph">▤</span><span>Archive</span></a>
-        <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint == 'settings' %}is-current{% endif %}"><span class="nav-glyph">⚙</span><span>Settings</span></a>
+        <a href="{{ url_for('home') }}" class="nav-link nav-home {% if request.endpoint == 'home' %}is-current{% endif %}" title="Home"><span class="nav-glyph">⌂</span></a>
+        <a href="{{ url_for('archive_index') }}" class="nav-link nav-archive {% if request.endpoint in ['archive_index', 'archive_detail'] %}is-current{% endif %}" title="Archive"><span class="nav-glyph">▤</span></a>
+        <a href="{{ url_for('settings') }}" class="nav-link nav-settings {% if request.endpoint == 'settings' %}is-current{% endif %}" title="Settings"><span class="nav-glyph">⚙︎</span></a>
       </nav>
-    </details>
+    </aside>
     <main class="main-content">
-      <header class="topbar"><div class="eyebrow">VIDEO READER <span class="topbar-rule"></span><span class="topbar-edition">LOCAL EDITION</span></div><a class="topbar-link" href="{{ url_for('archive_index') }}">Your archive ></a></header>
+      <div class="editorial-rule"></div>
       {% block content %}{% endblock %}
-      <footer class="page-footer"><span>PAGEONE · LOCAL WORKSPACE</span><span>Summaries stay on this device.</span></footer>
+      <div class="editorial-rule editorial-rule-bottom"></div>
     </main>
   </div>
-  <aside class="usage-meter">
-    <strong>SESSION · GPT-6 LUNA</strong>
-    <span>Input {{ "{:,}".format(usage.input_tokens) }} · cache {{ "{:,}".format(usage.cached_tokens) }}</span>
-    <span>Output {{ "{:,}".format(usage.output_tokens) }} · thinking {{ "{:,}".format(usage.reasoning_tokens) }}</span>
-    <span>Total {{ "{:,}".format(usage.total_tokens) }} tokens</span>
-    <strong>Known cost {{ usage.cost_usd }} USD{% if usage.is_partial %} · partial{% endif %}</strong>
-    {% if usage.unreported_calls %}<small>{{ usage.unreported_calls }} call(s) did not return usage.</small>{% endif %}
-    {% if usage.incomplete_details_calls %}<small>{{ usage.incomplete_details_calls }} call(s) omitted a token detail.</small>{% endif %}
-    {% if usage.unpriced_calls %}<small>{{ usage.unpriced_calls }} call(s) lack exact cache pricing.</small>{% endif %}
+  <aside class="usage-meter" title="Session tokens: input, cached input, output, reasoning; known USD cost">
+    <span>I {{ "{:,}".format(usage.input_tokens) }} · C {{ "{:,}".format(usage.cached_tokens) }} · O {{ "{:,}".format(usage.output_tokens) }} · R {{ "{:,}".format(usage.reasoning_tokens) }}</span>
+    <strong>T {{ "{:,}".format(usage.total_tokens) }} · {{ usage.cost_usd }}{% if usage.is_partial %} *{% endif %}</strong>
   </aside>
 </body>
 </html>

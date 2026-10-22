@@ -1,14 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Archive — PageOne{% endblock %}
 {% block content %}
-<section class="page-heading"><p class="kicker">YOUR READING DESK</p><h1>Archive</h1><p>Past lists, videos, and the notes you kept.</p></section>
-{% if not sources %}<div class="empty-state"><span class="empty-mark">P.</span><h2>Nothing saved yet.</h2><p>Summarize a video or playlist and it will appear here.</p><a class="button button-dark" href="{{ url_for('home') }}">Start with a link ></a></div>
+<section class="page-heading editorial-heading"><h1>Archive</h1></section>
+<form class="archive-search" method="get" action="{{ url_for('archive_index') }}">
+  <input id="archive-search" type="search" name="q" value="{{ query }}" maxlength="200" placeholder="Search archive">
+  <button type="submit" title="Search archive">⌕</button>
+</form>
+{% if not sources %}<div class="empty-state"><img src="{{ url_for('static', filename='images/pageone-monogram.png') }}" alt=""><h2>Nothing saved yet</h2></div>
 {% else %}
 <section class="archive-list">
-  <div class="archive-list-heading"><span>ITEM</span><span>VIDEOS</span><span>SUMMARIES</span><span>LAST OPENED</span></div>
   {% for source in sources %}
-  {% set summary_count = namespace(total=0) %}{% for video in source.videos %}{% if summaries.get(video.id) %}{% set summary_count.total = summary_count.total + 1 %}{% endif %}{% endfor %}
-  <a class="archive-row" href="{{ url_for('archive_detail', source_key=source.source_key) }}"><span class="archive-item"><small>{{ "PLAYLIST" if source.kind == "playlist" else "VIDEO" }}</small><strong>{{ source.title }}</strong></span><span>{{ source.videos|length }}</span><span>{{ summary_count.total }}</span><span>{{ source.updated_at[:10] }} <b>></b></span></a>
+  <a class="archive-row" href="{{ url_for('archive_detail', source_key=source.source_key) }}"><span class="archive-item"><strong>{{ source.title }}</strong></span><span class="archive-arrow"></span></a>
   {% endfor %}
 </section>
 {% endif %}

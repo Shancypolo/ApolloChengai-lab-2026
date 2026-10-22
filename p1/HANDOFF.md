@@ -2,20 +2,20 @@
 
 ## Document control
 
-Owner: the local app maintainer. Review this document whenever a prompt, model, input context, source domain, URL behavior, output shape, storage field, dependency, diagnostic, or test changes. Facts below describe the current code; product choices and limitations are called out as assumptions. Last reviewed: 2026-10-21.
+Owner: the local app maintainer. Review this document whenever a prompt, model, input context, source domain, URL behavior, output shape, storage field, dependency, diagnostic, or test changes. Facts below describe the current code; product choices and limitations are called out as assumptions. Last reviewed: 2026-10-22.
 
-PageOne is a single-user loopback prototype. It has no login, remote deployment, database server, job queue, multi-process lock, or service monitoring. One Flask process owns the jobs, archive lock, and usage meter. Restarting it stops active jobs and clears in-memory session usage; saved archive data remains on disk.
+PageOne is a finished local, single-user loopback app. It has no login, remote deployment, database server, job queue, multi-process lock, or service monitoring. One Flask process owns the jobs, archive lock, and usage meter. Restarting it stops active jobs and clears in-memory session usage; saved archive data remains on disk.
 
 ## Setup and run
 
-Python 3.10 or newer is required. In this directory, make and activate a virtual environment, then install the app dependencies:
+Python 3.10 or newer is required. In this directory, install dependencies directly and start the app:
 
 ```sh
-python -m venv .venv
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-# macOS/Linux: source .venv/bin/activate
 python -m pip install -r requirements.txt
+python app.py
 ```
+
+A virtual environment is optional. It is a private folder for this app's installed Python packages, so the install does not affect other projects. To use one, run `python -m venv .venv` and activate it with `.venv\Scripts\Activate.ps1` on Windows PowerShell or `source .venv/bin/activate` on macOS/Linux before installing.
 
 Set `OPENAI_API_KEY` in the active terminal; keep it out of source control. Start with `python app.py` and open `http://127.0.0.1:5000`. The app binds to loopback only. It does not load `.env` files. `PAGEONE_DATA_DIR` changes the local folder for the archive and log; by default they live under `instance/` beside `app.py`.
 
@@ -31,15 +31,25 @@ For offline and browser checks, install `requirements-dev.txt`; Playwright may n
 | `usage_accounting.py` | Responses usage parsing, published-rate arithmetic, in-memory session ledger. |
 | `storage.py` | Versioned local JSON archive, validation, atomic writes. |
 | `templates/` | Jinja2 full-page HTML documents and fragments. |
-| `static/css/pageone.css` | Responsive page styling. |
+| `static/css/pageone.css` | Responsive editorial page styling and locally bundled font faces. |
+| `static/fonts/` and `static/images/` | OFL font files, their license texts, and the generated PageOne monogram. |
+| `design-preview.png` | Image Gen home concept used for visual comparison; it is not loaded by the app. |
 | `tests/test_pageone.py` | Network-free service and route tests using fake providers. |
-| `tests/visual_test.py` | Local Chromium functional and viewport checks. |
+| `tests/visual_test.py` | Local Chromium functional and viewport checks with saved screenshots. |
 | `apiTests/` | Existing extraction experiments and a separate live diagnostic. |
 | `apiTests/live_diagnostic.py` | Optional quota-bearing source check or one synthetic summary request. |
 | `instance/pageone.json` | Local archive, ignored by Git. |
 | `instance/pageone.log` | Rotating diagnostics, ignored by Git. |
 
-The application uses Python, HTML/Jinja2, and CSS only; there is no application JavaScript, script tag, HTMX asset, or JavaScript dependency. Server-rendered forms do full page posts. Native `<details>` holds collapsed summaries and navigation state; a short HTML refresh requests job status. No dedicated accessibility or localization layer is included, as requested. Titles from YouTube remain source text and may contain Unicode.
+The application uses Python, HTML/Jinja2, and CSS only; there is no application JavaScript, script tag, HTMX asset, or JavaScript dependency. Archive search runs in Python; templates repeat already prepared rows and render visual states. Server-rendered forms do full page posts. Native `<details>` holds collapsed summaries and navigation state; a short HTML refresh requests job status. No dedicated accessibility or localization layer is included, as requested. Titles from YouTube remain source text and may contain Unicode.
+
+## Visual system and minimal copy
+
+The 2026-10-22 visual revision uses an original Image Gen engraved P, book, and laurel logo at `static/images/pageone-monogram.png`. The generated home concept is retained at `design-preview.png` in the repository; it is a visual reference, not a runtime dependency. The logo is separate from program logic. The app has a narrow icon rail, heavy paired newspaper rules, and locally hosted Bodoni Moda and Cinzel fonts. Home exposes only the logo, URL placeholder, Summarize button, icon rail, and the required compact meter. The Archive index exposes Archive, Search archive, source titles, or Nothing saved yet. Settings exposes Settings, AI summary preferences, the editable preference value, an icon save button, and icon feedback. Dynamic source titles, summaries, errors, and workflow screens remain readable.
+
+The chosen font sources are the [Bodoni Moda files and OFL license](https://github.com/google/fonts/tree/main/ofl/bodonimoda) and [Cinzel files and OFL license](https://github.com/google/fonts/tree/main/ofl/cinzel) in the official Google Fonts repository. Cinzel's [family description](https://github.com/google/fonts/blob/main/ofl/cinzel/DESCRIPTION.en_us.html) documents its inspiration in first-century Roman inscriptions. The OFL 1.1 license permits personal and commercial use, modification, and bundling subject to its terms; local license copies are bundled beside the fonts. Font choice and editorial layout are product decisions, not industry requirements. No remote font CDN is needed at runtime.
+
+The compact meter is an explicit exception to minimal page copy at the user's direction. The visible abbreviations are short; the USD amount and partial asterisk preserve the existing accounting semantics. The sidebar can change width through native `<details>` and CSS; its links stay visible as icons in both states. Browser rendering and form behavior require no app script.
 
 ## Runtime flow
 
@@ -49,7 +59,7 @@ The application uses Python, HTML/Jinja2, and CSS only; there is no application 
 4. The source page lists every valid title and links each title to its YouTube video. Users may search title text, sort by playlist order, title, publish date, author, or topic, and select all, none, or individual rows. Submitting an action performs a normal HTTP form post.
 5. A summary batch runs sequentially in a daemon thread. Existing summaries are linked by video ID and reused unless the user checks “Re-summarize.” For new or refreshed summaries, the app fetches English captions and sends the title, transcript, and current preference to the model. Transcripts are temporary and are not written to the archive or log.
 6. Summary results are collapsed `<details>` rows with a server-side GET search across title, topic, and summary text. Each row can accept a follow-up question. The chat action fetches captions again and sends only that video’s title, transcript, saved summary, recent eight Q&A turns, and current question. It stores the question and answer in the JSON archive.
-7. Archive pages show saved sources, all their titles, available summaries, title topics, and stored Q&A. Settings save a reusable preference. The default is “Write a concise academic summary in coherent paragraphs. Explain the central thesis, key arguments, evidence, and limitations.”
+7. Archive pages show saved sources, filter source and video titles from the index search, and show all titles, available summaries, title topics, and stored Q&A on each source page. Settings save a reusable preference. The default is “Write a concise academic summary in coherent paragraphs. Explain the central thesis, key arguments, evidence, and limitations.”
 
 Job progress exists only in memory. The HTML progress page refreshes itself every two seconds while its job is pending; terminal jobs render a result or a short error page. Restarting the process loses active job state, but summaries written before restart remain saved.
 
@@ -75,7 +85,7 @@ These controls reduce the attack surface; no prompt can guarantee that a model w
 
 ## Usage and USD cost meter
 
-The fixed bottom-left page meter displays the current browser session’s input, cached-input, output, reasoning (“thinking”), total tokens, and known USD cost. It also shows when a request did not return usage, when a usage breakdown is incomplete, or when exact cache pricing is unavailable.
+The fixed bottom-left page meter displays the current browser session’s input (`I`), cached input (`C`), output (`O`), reasoning (`R`), total (`T`) tokens, and known USD cost. An asterisk marks partial accounting. Its title text explains the abbreviations; the detailed unreported, incomplete, and unpriced counts remain in Python ledger data and are not shown as long page copy.
 
 As retrieved from the [official OpenAI API pricing page](https://developers.openai.com/api/docs/pricing/) on 2026-10-21, GPT-6 Luna standard rates were $0.10 per million input tokens, $0.01 per million cached input tokens, and $0.50 per million output tokens. The implementation uses integer units of 1/100,000,000 USD per token:
 
@@ -127,11 +137,19 @@ python tests/visual_test.py
 
 ## Verification record
 
-Update this section only with commands actually run. Current evidence for this revision:
+Update this section only with commands actually run. Earlier checks below are historical evidence from 2026-10-21; replace or supplement them with commands actually run for each new revision:
+
+2026-10-22 editorial revision:
+
+- Python compilation passed for five runtime modules, two test modules, and the separate live diagnostic.
+- Offline fake-client suite passed: 26 tests. It used no OpenAI or YouTube network requests.
+- Local Chromium browser flow passed with fake providers after a first screenshot exposed a 280-pixel search layout crowding and a later check exposed archive-detail overflow at 320 pixels. Both were fixed; the final flow passed at 280×940, 320×940, 430×1100, 844×390, 1365×768, and 3440×1100. It covered source listing, sorting, selection, summaries, follow-up chat, archive search, and preferences. Screenshots were visually reviewed at `/tmp/pageone-visual` against `design-preview.png`: icon rail and double rules, monogram scale, centered form, paper/ink palette, and meter position. The mark and rules are close to the concept; the compact meter is an intentional addition required by the user. The 280-pixel form stacks its button to retain the full placeholder. This was local Chromium, not cloud browser.
+- A loopback `python app.py` CLI smoke passed with a temporary data directory: the page returned 200, included the logo URL and meter, and had no script tag.
+- No new live OpenAI request was run for this styling revision; the previously recorded live API diagnostics below remain historical, quota-bearing evidence.
 
 - Python compile check: passed for all five runtime modules, both test modules, and the live diagnostic.
 - Offline fake-client suite: 26 tests passed; no YouTube or OpenAI network calls were made.
-- Local Chromium visual flow: passed with fake source, topic, summary, and chat services. It exercised title listing, sort/filter, all/none/individual selection, summary search, batch results, chat, archive search, settings, and no-script/no-ARIA markup, with no horizontal overflow at 280×940, 320×940, 430×1100, 844×390, 1365×768, and 3440×1100. Screenshots were visually inspected in `/tmp/pageone-visual`.
+- Earlier local Chromium visual flow: passed with fake source, topic, summary, and chat services. It exercised title listing, sort/filter, all/none/individual selection, summary search, batch results, chat, archive search, settings, and no-script/no-ARIA markup, with no horizontal overflow at 280×940, 320×940, 430×1100, 844×390, 1365×768, and 3440×1100. Screenshots were visually inspected in `/tmp/pageone-visual`.
 - CLI startup smoke test: passed; `python app.py` served the home page over loopback with a temporary data directory, session meter, and no script tag.
 - Live OpenAI summary diagnostic: one GPT-6 Luna/high request succeeded with 190 input, 50 output, and 0 reasoning tokens; reported known token-rate cost was $0.00004400. No transcript or summary text was printed.
 - Live OpenAI title-topic diagnostic: after the final title-only prompt update, one GPT-6 Luna/high request succeeded with two synthetic titles; `Video 2` was labeled `Other`, 211 total tokens were reported, and known cost was $0.00003710. No real video titles or transcript were sent.
@@ -148,10 +166,10 @@ Update this section only with commands actually run. Current evidence for this r
 | [OWASP LLM Prompt Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html) | Prompt wording alone is not a dependable injection boundary; least privilege and separation of data/control are relevant. | The app combines fixed instructions, data fields, no tools, output validation, and escaped rendering; none guarantees jailbreak resistance. |
 | [NIST AI 600-1](https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf) | Confabulation is a generative-AI risk. | Output is treated as a reading aid and not an authoritative transcript. |
 | [yt-dlp README](https://github.com/yt-dlp/yt-dlp/blob/master/README.md) | `yt-dlp` documents flat playlist extraction and subtitle options. | It is used to follow the repository’s existing experiments; compatibility and permission are not assured. |
-| [YouTube Terms](https://www.youtube.com/t/terms) and [playlistItems API](https://developers.google.com/youtube/v3/docs/playlistItems/list) | YouTube publishes its terms and an official playlist-listing API. | This prototype does not use the official API; a future approved integration requires credential and quota design. |
+| [YouTube Terms](https://www.youtube.com/t/terms) and [playlistItems API](https://developers.google.com/youtube/v3/docs/playlistItems/list) | YouTube publishes its terms and an official playlist-listing API. | This app does not use the official API; a future approved integration requires credential and quota design. |
 | HTML and CSS implementation | Browser-native forms, `<details>`, and timed document refresh require no application script. | They are used for sorting/filter posts, collapsible rows, and progress refreshes to meet the no-JavaScript request. |
 
-The official pricing page was retrieved for this handoff on 2026-10-21. The other links are maintainer references for provider behavior, injection limits, source policy, and the existing extraction method. Provider or platform pages can change; recheck before materially changing those contracts.
+The official pricing page was retrieved for the previous handoff on 2026-10-21. Font license and family pages were consulted on 2026-10-22. The other links are maintainer references for provider behavior, injection limits, source policy, and the existing extraction method. Provider or platform pages can change; recheck before materially changing those contracts.
 
 ## Ownership, maintenance, and acceptance
 
