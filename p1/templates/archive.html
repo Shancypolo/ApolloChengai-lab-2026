@@ -6,6 +6,7 @@
   <input id="archive-search" type="search" name="q" value="{{ query }}" maxlength="200" placeholder="Search archive">
   <button type="submit" title="Search archive">⌕</button>
 </form>
+<p class="file-caption">Archive file: {{ archive_file }}</p>
 {% if not sources %}<div class="empty-state"><h2>Nothing saved yet</h2></div>
 {% else %}
 <section class="archive-list">

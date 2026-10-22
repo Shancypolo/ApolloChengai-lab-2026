@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import threading
 import tempfile
 import time
 import unittest
@@ -465,13 +466,14 @@ class PageOneRouteTests(unittest.TestCase):
         self.assertEqual(saved["summary_preferences"], "Preserve uncertainty and cite evidence.")
 
     def test_playlist_server_controls_keep_selection_and_sort_by_author(self):
-        """Apply filtering, sorting, and select-all or none with full posts."""
+        """Sort with one choice post and keep selection and filter controls."""
         self.inspect_playlist()
         response = self.client.post("/sources/playlist:PLVANSOs5ny50", data={
-            "csrf_token": self.csrf, "list_action": "sort", "sort_by": "author",
+            "csrf_token": self.csrf, "sort_choice": "author", "sort_by": "original",
             "video_ids": ["GmBG-26_Izw", "aBcdEF_1234"],
         })
         self.assertLess(response.data.index(b"GmBG-26_Izw"), response.data.index(b"aBcdEF_1234"))
+        self.assertIn(b'class="text-button sort-choice is-current" type="submit" name="sort_choice" value="author"', response.data)
         response = self.client.post("/sources/playlist:PLVANSOs5ny50", data={
             "csrf_token": self.csrf, "list_action": "filter", "filter_text": "careful",
             "video_ids": ["GmBG-26_Izw"],
@@ -505,9 +507,12 @@ class PageOneRouteTests(unittest.TestCase):
         """Save a new dynamic video answer and record its reported tokens."""
         self.inspect_playlist()
         self.submit_summary()
-        response = self.client.post("/chat/GmBG-26_Izw", data={
+        job, response = self.submit_and_wait("/chat/GmBG-26_Izw", {
             "csrf_token": self.csrf, "question": "How certain is the conclusion?",
-        }, follow_redirects=True)
+        })
+        self.assertEqual(job["status"], "complete")
+        self.assertEqual(response.status_code, 302)
+        response = self.client.get(response.headers["Location"])
         self.assertIn(b"tentative conclusion", response.data)
         self.assertEqual(self.chat_calls[0][0], "How certain is the conclusion?")
         stored = self.app.config["STORE"].read()["summaries"]["GmBG-26_Izw"]
@@ -516,7 +521,41 @@ class PageOneRouteTests(unittest.TestCase):
         meter = self.app.config["USAGE"].snapshot(self.session_id)
         self.assertEqual(meter["api_calls"], 3)
         self.assertEqual(meter["total_tokens"], 3300)
-        self.assertIn(b"known USD cost", response.data)
+        self.assertIn(b"Known cost:", response.data)
+        self.assertIn(b"3 AI calls", response.data)
+
+    def test_chat_shows_loading_notice_before_answer(self):
+        """Show a progress document before a slow follow-up finishes."""
+        self.inspect_playlist()
+        self.submit_summary()
+        waiting = threading.Event()
+        release = threading.Event()
+
+        def slow_chat(title, transcript, summary, question, history, usage_callback=None):
+            """Pause the fake answer until this test checks the loading page."""
+            waiting.set()
+            release.wait(timeout=3)
+            return "A delayed answer."
+
+        self.app.config["CHAT_FUNCTION"] = slow_chat
+        try:
+            previous_jobs = set(self.app.config["JOBS"]._jobs)
+            response = self.client.post("/chat/GmBG-26_Izw", data={
+                "csrf_token": self.csrf, "question": "What follows?",
+            })
+            self.assertIn(b"Answering your question", response.data)
+            self.assertIn(b'http-equiv="refresh"', response.data)
+            self.assertTrue(waiting.wait(timeout=3))
+            job_id = (set(self.app.config["JOBS"]._jobs) - previous_jobs).pop()
+            self.assertIn(b"Writing your answer", self.client.get(f"/jobs/{job_id}").data)
+        finally:
+            release.set()
+        self.assertEqual(self.wait_for_job(job_id)["status"], "complete")
+
+    def test_archive_and_settings_show_data_file_paths(self):
+        """Show the configured archive and log file names on their pages."""
+        self.assertIn(str(Path(self.folder.name) / "pageone.json").encode(), self.client.get("/archive").data)
+        self.assertIn(str(Path(self.folder.name) / "pageone.log").encode(), self.client.get("/settings").data)
 
     def test_csrf_blank_preferences_and_empty_selection_are_reported(self):
         """Reject missing form tokens and explain blank preference or selection."""

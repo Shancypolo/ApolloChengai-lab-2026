@@ -22,9 +22,9 @@
       {% block content %}{% endblock %}
     </main>
   </div>
-  <aside class="usage-meter" title="Session tokens: input, cached input, output, reasoning; known USD cost">
-    <span>I {{ "{:,}".format(usage.input_tokens) }} · C {{ "{:,}".format(usage.cached_tokens) }} · O {{ "{:,}".format(usage.output_tokens) }} · R {{ "{:,}".format(usage.reasoning_tokens) }}</span>
-    <strong>T {{ "{:,}".format(usage.total_tokens) }} · {{ usage.cost_usd }}{% if usage.is_partial %} *{% endif %}</strong>
+  <aside class="usage-meter" title="Cached tokens are included in input; thinking tokens are included in output. Cost uses reported usage and current model token rates.">
+    <span>Session tokens: {{ "{:,}".format(usage.total_tokens) }} total · {{ "{:,}".format(usage.input_tokens) }} input ({{ "{:,}".format(usage.cached_tokens) }} cached) · {{ "{:,}".format(usage.output_tokens) }} output ({{ "{:,}".format(usage.reasoning_tokens) }} thinking)</span>
+    <strong>{{ usage.api_calls }} AI calls · Known cost: {{ usage.cost_usd }} USD{% if usage.is_partial %} · Partial usage: {{ usage.unreported_calls }} unreported, {{ usage.unpriced_calls }} unpriced, {{ usage.incomplete_details_calls }} incomplete details{% endif %}</strong>
   </aside>
 </body>
 </html>

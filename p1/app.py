@@ -38,6 +38,13 @@ MAX_PREFERENCE_LENGTH = 2_000
 MAX_QUESTION_LENGTH = 1_000
 MAX_FILTER_LENGTH = 200
 VIDEO_SORT_OPTIONS = {"original", "published_at", "author", "topic", "title"}
+VIDEO_SORT_LABELS = (
+    ("original", "Playlist order"),
+    ("published_at", "Publish date"),
+    ("author", "Author"),
+    ("topic", "Topic"),
+    ("title", "Title"),
+)
 
 
 class JobRegistry:
@@ -49,7 +56,7 @@ class JobRegistry:
         self._lock = threading.RLock()
 
     def create(self, job_type: str, session_id: str, source_key: str = "", total: int = 0) -> str:
-        """Create a queued inspection or summary job and return its ID."""
+        """Create a queued inspection, summary, or chat job and return its ID."""
         job_id = uuid.uuid4().hex
         with self._lock:
             self._jobs[job_id] = {
@@ -276,6 +283,7 @@ def render_source_results(
         selected_ids=selected,
         hidden_selected_ids=selected - visible_ids,
         sort_by=sort_by if sort_by in VIDEO_SORT_OPTIONS else "original",
+        sort_options=VIDEO_SORT_LABELS,
         filter_text=filter_text,
         warning=warning,
         error_notice_message=warning,
@@ -437,6 +445,37 @@ def run_source_inspection_job(
             status="error",
             message=failure_notice(error),
         )
+
+
+def run_chat_job(app: Flask, job_id: str, video_id: str, question: str, session_id: str) -> None:
+    """Answer one saved video's question and report progress to its page."""
+    registry: JobRegistry = app.config["JOBS"]
+    store: JsonStore = app.config["STORE"]
+    registry.update(job_id, status="running", message="Reading captions for your question.")
+    try:
+        saved = store.read()["summaries"][video_id]
+        transcript = app.config["TRANSCRIPT_FETCHER"](video_id)
+        registry.update(job_id, message="Writing your answer.")
+        answer = app.config["CHAT_FUNCTION"](
+            saved["title"], transcript, saved["summary"], question, saved.get("chat", []),
+            usage_callback=lambda usage: app.config["USAGE"].record(session_id, usage),
+        )
+        chat_turn = {"question": question, "answer": answer, "created_at": now_utc()}
+
+        def save_chat(archive_data: dict[str, Any]) -> None:
+            """Append this answer to the saved video's chat history."""
+            archive_data["summaries"][video_id].setdefault("chat", []).append(chat_turn)
+
+        store.update(save_chat)
+        registry.update(
+            job_id, status="complete", question=question, answer=answer,
+            source_key=(saved.get("source_keys") or [""])[-1], message="Answer ready.",
+        )
+    except Exception as error:
+        safe_log(app, f"Video {video_id} follow-up failed", error)
+        registry.update(job_id, status="error", question=question, message=failure_notice(error))
+
+
 def create_app(
     data_directory: str | Path | None = None,
     source_fetcher: Callable[[str, str], dict[str, Any]] = fetch_source,
@@ -602,12 +641,14 @@ def create_app(
         if not source:
             abort(404)
         all_ids = {video["id"] for video in source.get("videos", [])}
-        sort_by = request.values.get("sort_by", "original")
+        sort_by = request.values.get("sort_choice") or request.values.get("sort_by", "original")
         filter_text = request.values.get("filter_text", "")
         warning = request.values.get("warning", "")
         selected_ids = all_ids
         if request.method == "POST":
             action = request.form.get("list_action", "")
+            if request.form.get("sort_choice") in VIDEO_SORT_OPTIONS:
+                action = "sort"
             if action == "select_none":
                 selected_ids = set()
             elif action == "select_all":
@@ -646,11 +687,23 @@ def create_app(
 
     @app.get("/jobs/<job_id>")
     def job_progress(job_id: str):
-        """Return current progress or the completed summary batch."""
+        """Return current progress or a completed inspection, batch, or chat."""
         job = app.config["JOBS"].get(job_id)
         if not job:
             safe_log(app, "A missing summary job was requested")
             return render_template("notice.html", message="That summary job is no longer available.", tone="error"), 404
+        if job["type"] == "chat":
+            if job["status"] not in {"complete", "error"}:
+                return render_template("chat_progress.html", job=job)
+            if job["status"] == "complete" and job.get("source_key"):
+                return redirect(url_for("archive_detail", source_key=job["source_key"]))
+            message = job.get("answer") if job["status"] == "complete" else job["message"]
+            return render_template(
+                "chat_answer.html", question=job.get("question", ""), answer=message,
+                tone="success" if job["status"] == "complete" else "error",
+                error_notice_message=message if job["status"] == "error" else "",
+                dismiss_url=url_for("archive_index"),
+            )
         if job["status"] in {"complete", "partial", "error"}:
             if job["type"] == "inspection":
                 if job["status"] == "error":
@@ -686,7 +739,10 @@ def create_app(
         archive = app.config["STORE"].read()
         sources = sorted(archive["sources"].values(), key=lambda item: item.get("updated_at", ""), reverse=True)
         query = request.args.get("q", "")[:MAX_FILTER_LENGTH]
-        return render_template("archive.html", sources=archive_rows(sources, query), query=query)
+        return render_template(
+            "archive.html", sources=archive_rows(sources, query), query=query,
+            archive_file=str(app.config["STORE"].file_path.resolve()),
+        )
 
     @app.get("/archive/<path:source_key>")
     def archive_detail(source_key: str):
@@ -730,11 +786,12 @@ def create_app(
             tone=tone,
             error_notice_message=message if tone == "error" else "",
             dismiss_url=url_for("settings"),
+            log_file=str((app.config["DATA_DIRECTORY"] / LOG_FILE_NAME).resolve()),
         )
 
     @app.post("/chat/<video_id>")
     def chat_about_video(video_id: str):
-        """Fetch fresh captions, answer a follow-up, and save only Q&A text."""
+        """Validate a follow-up and show progress while its answer is written."""
         archive = app.config["STORE"].read()
         saved = archive["summaries"].get(video_id)
         if not saved:
@@ -744,40 +801,15 @@ def create_app(
         if not question or len(question) > MAX_QUESTION_LENGTH:
             safe_log(app, "A follow-up question failed validation")
             return render_template("chat_answer.html", question=question, answer="Enter a question up to 1,000 characters.", tone="error", error_notice_message="Enter a question up to 1,000 characters.", dismiss_url=url_for("archive_index"))
-        try:
-            transcript = app.config["TRANSCRIPT_FETCHER"](video_id)
-            session_id = session["usage_session_id"]
-            answer = app.config["CHAT_FUNCTION"](
-                saved["title"],
-                transcript,
-                saved["summary"],
-                question,
-                saved.get("chat", []),
-                usage_callback=lambda usage: app.config["USAGE"].record(session_id, usage),
-            )
-            chat_turn = {"question": question, "answer": answer, "created_at": now_utc()}
-            def save_chat(archive_data: dict[str, Any]) -> None:
-                """Append this answer to the video's compact chat history."""
-                archive_data["summaries"][video_id].setdefault("chat", []).append(chat_turn)
-            app.config["STORE"].update(save_chat)
-            source_key = (saved.get("source_keys") or [""])[-1]
-            if source_key:
-                return redirect(url_for("archive_detail", source_key=source_key))
-            return render_template("chat_answer.html", question=question, answer=answer, tone="success")
-        except (SourceError, SummaryError) as error:
-            safe_log(app, f"Video {video_id} follow-up failed", error)
-            message = failure_notice(error)
-            return render_template("chat_answer.html", question=question, answer=message, tone="error", error_notice_message=message, dismiss_url=url_for("archive_index"))
-        except Exception as error:
-            safe_log(app, f"Video {video_id} follow-up failed", error)
-            return render_template(
-                "chat_answer.html",
-                question=question,
-                answer=failure_notice(error),
-                tone="error",
-                error_notice_message=failure_notice(error),
-                dismiss_url=url_for("archive_index"),
-            )
+        session_id = session["usage_session_id"]
+        job_id = app.config["JOBS"].create("chat", session_id)
+        job = app.config["JOBS"].get(job_id)
+        worker = threading.Thread(
+            target=run_chat_job, args=(app, job_id, video_id, question, session_id),
+            daemon=True, name=f"pageone-{job_id[:8]}",
+        )
+        worker.start()
+        return render_template("chat_progress.html", job=job)
 
     return app
 

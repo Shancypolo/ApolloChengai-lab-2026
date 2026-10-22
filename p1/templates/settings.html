@@ -3,6 +3,7 @@
 {% block content %}
 {% include "error_notice.html" %}
 <section class="page-heading editorial-heading"><h1>Settings</h1></section>
+<p class="file-caption">Error log file: {{ log_file }}</p>
 <section class="settings-panel">
   <form method="post" action="{{ url_for('settings') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label class="field-title" for="summary-preferences">AI summary preferences</label>

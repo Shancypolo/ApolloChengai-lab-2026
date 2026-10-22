@@ -17,12 +17,10 @@
       <div class="list-controls">
         <button class="text-button" type="submit" name="list_action" value="select_all">Select all</button>
         <button class="text-button" type="submit" name="list_action" value="select_none">None</button>
-        <div class="sort-control"><span>Sort</span><select name="sort_by">
-          {% for value, label in [('original', 'Playlist order'), ('published_at', 'Publish date'), ('author', 'Author'), ('topic', 'Topic'), ('title', 'Title')] %}
-          <option value="{{ value }}" {% if sort_by == value %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select></div>
-        <button class="text-button" type="submit" name="list_action" value="sort">Apply</button>
+        <input type="hidden" name="sort_by" value="{{ sort_by }}">
+        <div class="sort-control"><span>Sort</span>
+          {% for value, label in sort_options %}<button class="text-button sort-choice {% if sort_by == value %}is-current{% endif %}" type="submit" name="sort_choice" value="{{ value }}">{{ label }}</button>{% endfor %}
+        </div>
       </div>
     </div>
     <div class="filter-row"><input type="search" name="filter_text" value="{{ filter_text }}" placeholder="Find a title in this list…"><button class="text-button" type="submit" name="list_action" value="filter">Filter</button></div>

@@ -8,11 +8,11 @@
 - Archive index search matches source and video titles in Python.
 - HTTPS YouTube video and playlist links are checked against an explicit host and ID allowlist.
 - Playlist titles load before summaries. GPT-6 Luna assigns topic labels from title strings only; uninformative titles receive `Other`.
-- Users can sort by playlist order, title, publish date, author, or topic, filter the title list, and select all, none, or individual videos.
+- Users can sort immediately by playlist order, title, publish date, author, or topic, filter the title list, and select all, none, or individual videos using large selection circles.
 - Selected videos are summarized in a background batch; saved summaries are reused by video ID unless the user requests a refresh.
 - Collapsed summaries in batch results and archive detail can be searched by title, topic, or summary text without JavaScript.
-- Summary and follow-up prompts use English. Follow-ups fetch captions and store only the question and answer.
-- Local JSON archive stores source rows, title topics, summaries, chat turns, timestamps, and summary preferences.
+- Summary and follow-up prompts use English. Follow-ups show loading progress, fetch captions, and store only the question and answer.
+- Local JSON archive stores source rows, title topics, summaries, chat turns, timestamps, and summary preferences. Archive and Settings show the archive and error-log file paths.
 - Multiple playlists can be saved side by side; automatic startup refresh of newly added playlist videos remains deferred.
 - Session token counts and estimated model cost stay in process memory and are discarded after the browser session or ledger expiry.
 - Rotating diagnostic logs omit transcript text, prompts, model output, and credentials.

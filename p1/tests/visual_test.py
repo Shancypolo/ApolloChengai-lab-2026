@@ -159,10 +159,11 @@ def main() -> None:
                 if width in (280, 1600, 3440):
                     page.screenshot(path=str(screenshots_directory / f"results-{width}.png"), full_page=True)
 
-            page.locator("select[name=sort_by]").select_option("author")
-            page.locator("button[name=list_action][value=sort]").click()
+            page.locator("button[name=sort_choice][value=author]").click()
             titles = page.locator(".video-title").all_text_contents()
             assert titles[0].startswith("The first question") and titles[1].startswith("A long view")
+            assert page.locator(".sort-choice.is-current").inner_text() == "Author"
+            assert page.locator(".video-check input").first.bounding_box()["width"] == 66
             page.locator("input[name=filter_text]").fill("record")
             page.locator("button[name=list_action][value=filter]").click()
             assert page.locator(".video-row").count() == 0
@@ -193,6 +194,8 @@ def main() -> None:
 
             page.locator('.chat-form input[name="question"]').first.fill("How certain is that conclusion?")
             page.locator(".chat-form button[type=submit]").first.click()
+            page.get_by_text("Answering your question.").wait_for(timeout=5_000)
+            page.screenshot(path=str(screenshots_directory / "chat-loading.png"), full_page=True)
             page.get_by_text("The example presents the conclusion as tentative.").wait_for(timeout=10_000)
             assert page.locator(".chat-turn").count() == 1
             assert_no_embedded_scripts_or_aria(page)
@@ -201,6 +204,7 @@ def main() -> None:
             assert page.locator(".sidebar").count() == 0
             page.locator('.site-nav a[href="/archive"]').click()
             page.locator("h1").filter(has_text="Archive").wait_for()
+            assert "pageone.json" in page.locator(".file-caption").inner_text()
             assert page.get_by_text("Lectures on evidence and uncertainty").count() >= 1
             page.screenshot(path=str(screenshots_directory / "archive-mobile.png"), full_page=True)
             page.locator("#archive-search").fill("no matching source")
@@ -225,6 +229,7 @@ def main() -> None:
             assert_no_horizontal_overflow(page, 320, 940)
             page.locator('.site-nav a[href="/settings"]').click()
             page.locator("h1").filter(has_text="Settings").wait_for()
+            assert "pageone.log" in page.locator(".file-caption").inner_text()
             page.locator("#summary-preferences").fill("Keep uncertainty visible.")
             page.locator("button[type=submit]").click()
             page.locator('.settings-feedback[title="Summary preferences saved."]').wait_for()
