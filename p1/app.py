@@ -6,6 +6,7 @@ import ipaddress
 import logging
 import os
 import secrets
+import sys
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from typing import Any, Callable
 from urllib.parse import urlsplit
 
 from flask import Flask, abort, g, redirect, render_template, request, session, url_for
+from werkzeug.exceptions import HTTPException
 
 from storage import DEFAULT_PREFERENCES, JsonStore
 from summary_service import SummaryError, answer_video_question, label_video_titles, summarize_video
@@ -83,15 +85,26 @@ def now_utc() -> str:
 
 
 def configure_safe_logging(app: Flask) -> None:
-    """Write short, rotating diagnostics without transcript or API content."""
+    """Write privacy-safe failures to the rotating log and launch terminal."""
     log_path = Path(app.config["DATA_DIRECTORY"]) / LOG_FILE_NAME
     log_path.parent.mkdir(parents=True, exist_ok=True)
     handler = RotatingFileHandler(log_path, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     logger = logging.getLogger("pageone")
     logger.setLevel(logging.INFO)
+    for existing in list(logger.handlers):
+        if isinstance(existing, RotatingFileHandler) and existing.baseFilename != str(log_path):
+            logger.removeHandler(existing)
+            existing.close()
     if not any(isinstance(item, RotatingFileHandler) and item.baseFilename == str(log_path) for item in logger.handlers):
         logger.addHandler(handler)
+    else:
+        handler.close()
+    if not any(type(item) is logging.StreamHandler for item in logger.handlers):
+        terminal_handler = logging.StreamHandler(sys.stderr)
+        terminal_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        logger.addHandler(terminal_handler)
+    logger.propagate = False
     app.config["PAGEONE_LOGGER"] = logger
 
 
@@ -99,10 +112,27 @@ def safe_log(app: Flask, message: str, error: Exception | None = None) -> None:
     """Record a short event and exception type without sensitive text."""
     logger: logging.Logger = app.config["PAGEONE_LOGGER"]
     if error is None:
-        logger.info(message)
+        logger.warning(message)
         return
     safe_error_type = type(error.__cause__ or error).__name__
     logger.error("%s (%s)", message, safe_error_type)
+
+
+def failure_notice(error: Exception) -> str:
+    """Turn provider and setup failures into safe, short product messages."""
+    cause = error.__cause__ or error
+    error_type = type(cause).__name__.casefold()
+    if any(word in error_type for word in ("connection", "connect", "timeout", "network")):
+        return "Connection unavailable. Check your connection and try again."
+    if isinstance(error, (SourceError, SummaryError)) and "install" in str(error).casefold():
+        return "PageOne needs an update. Reinstall it and try again."
+    if isinstance(error, SummaryError) and "OPENAI_API_KEY" in str(error):
+        return "AI is unavailable. Add your API key and try again."
+    if isinstance(error, SummaryError):
+        return "AI could not finish. Please try again."
+    if isinstance(error, SourceError):
+        return str(error)
+    return "Something went wrong. Please try again."
 
 
 def clean_video_title(source: dict[str, Any], video_id: str) -> str:
@@ -248,6 +278,8 @@ def render_source_results(
         sort_by=sort_by if sort_by in VIDEO_SORT_OPTIONS else "original",
         filter_text=filter_text,
         warning=warning,
+        error_popup_message=warning,
+        dismiss_url=url_for("source_results", source_key=source["source_key"]),
     )
 
 
@@ -327,13 +359,13 @@ def run_summary_job(
                 )
                 succeeded += 1
             except (SourceError, SummaryError) as error:
-                failed.append({"video_id": video_id, "title": clean_video_title(source, video_id), "message": str(error)})
+                failed.append({"video_id": video_id, "title": clean_video_title(source, video_id), "message": failure_notice(error)})
                 safe_log(app, f"Video {video_id} could not be summarized", error)
             except Exception as error:
                 failed.append({
                     "video_id": video_id,
                     "title": clean_video_title(source, video_id),
-                    "message": "The request failed. Check the local log for the error type.",
+                    "message": failure_notice(error),
                 })
                 safe_log(app, f"Video {video_id} request failed", error)
             registry.update(job_id, finished=index, succeeded=succeeded, failed=list(failed))
@@ -351,8 +383,8 @@ def run_summary_job(
         registry.update(
             job_id,
             status="error",
-            failed=[{"video_id": "", "title": "Batch", "message": "The batch stopped. Check the local log for the error type."}],
-            message="The batch stopped before all selected videos were checked.",
+            failed=[{"video_id": "", "title": "Batch", "message": failure_notice(error)}],
+            message=failure_notice(error),
         )
 
 
@@ -372,7 +404,7 @@ def run_source_inspection_job(
         previous = store.read()["sources"].get(source["source_key"])
         source = source_record(source, previous)
         titles = [str(video.get("title") or "") for video in source.get("videos", [])]
-        registry.update(job_id, total=len(titles), message="Assigning topics from titles only.")
+        registry.update(job_id, total=len(titles), message="Finding topics.")
         warning = ""
         try:
             labels = app.config["TOPIC_FUNCTION"](
@@ -381,7 +413,7 @@ def run_source_inspection_job(
             )
         except Exception as error:
             labels = ["Other"] * len(titles)
-            warning = "Topic labels could not be generated; titles are grouped as Other."
+            warning = f"{failure_notice(error)} Titles are grouped under Other."
             safe_log(app, f"Source {source_id} title topic request failed", error)
         source = apply_title_topics(source, labels)
         save_inspected_source(store, source)
@@ -397,13 +429,13 @@ def run_source_inspection_job(
         )
     except (SourceError, ValueError) as error:
         safe_log(app, f"Source {source_id} listing failed", error)
-        registry.update(job_id, status="error", message=str(error))
+        registry.update(job_id, status="error", message=failure_notice(error))
     except Exception as error:
         safe_log(app, f"Source {source_id} listing failed", error)
         registry.update(
             job_id,
             status="error",
-            message="The source could not be listed. Check the local log for the error type.",
+            message=failure_notice(error),
         )
 def create_app(
     data_directory: str | Path | None = None,
@@ -475,18 +507,20 @@ def create_app(
         safe_log(app, "Local archive validation failed", error)
         return render_template(
             "notice.html",
-            message="The local archive could not be read. Its original file was kept; check the log and back it up before repair.",
+            message="Saved items could not be opened. Your data has been kept.",
             tone="error",
         ), 500
 
     @app.errorhandler(403)
     def local_request_forbidden(error: Any):
         """Show a local error page with the session usage meter."""
+        safe_log(app, "A forbidden page request was rejected")
         return render_template("notice.html", message="That request is not allowed.", tone="error"), 403
 
     @app.errorhandler(404)
     def page_not_found(error: Any):
         """Show a local not-found page with the session usage meter."""
+        safe_log(app, "A missing page was requested")
         return render_template("notice.html", message="That PageOne page was not found.", tone="error"), 404
 
     @app.errorhandler(500)
@@ -499,9 +533,18 @@ def create_app(
             safe_log(app, "A local page request returned an internal error")
         return render_template(
             "notice.html",
-            message="This page could not be completed. Check the local log for the error type.",
+            message="Something went wrong. Please try again.",
             tone="error",
         ), 500
+
+    @app.errorhandler(Exception)
+    def unexpected_error(error: Exception):
+        """Show a safe popup and log an error class for uncaught requests."""
+        safe_log(app, "An unhandled page request failed", error)
+        status = error.code if isinstance(error, HTTPException) else 500
+        return render_template(
+            "notice.html", message="Something went wrong. Please try again.", tone="error"
+        ), status
 
     @app.after_request
     def set_safety_headers(response):
@@ -519,12 +562,8 @@ def create_app(
 
     @app.get("/")
     def home():
-        """Show the centered source search and recent archive links."""
-        archive = app.config["STORE"].read()
-        recent_sources = sorted(
-            archive["sources"].values(), key=lambda item: item.get("updated_at", ""), reverse=True
-        )[:4]
-        return render_template("home.html", recent_sources=recent_sources)
+        """Show the source search across the available viewport."""
+        return render_template("home.html")
 
     @app.post("/inspect")
     def inspect_source():
@@ -533,13 +572,15 @@ def create_app(
         try:
             identifiers = parse_youtube_url(raw_url)
         except SourceError as error:
-            return render_template("notice.html", message=str(error), tone="error")
+            safe_log(app, "Source link validation failed", error)
+            return render_template("notice.html", message=failure_notice(error), tone="error")
         selected_kind = request.form.get("source_kind", "")
         if identifiers["video_id"] and identifiers["playlist_id"] and selected_kind not in {"video", "playlist"}:
             return render_template("ambiguity.html", source_url=raw_url)
         kind = selected_kind or ("playlist" if identifiers["playlist_id"] else "video")
         source_id = identifiers["playlist_id"] if kind == "playlist" else identifiers["video_id"]
         if not source_id:
+            safe_log(app, "Source selection was incomplete")
             return render_template("notice.html", message="Choose a video or playlist from the link.", tone="error")
         session_id = session["usage_session_id"]
         job_id = app.config["JOBS"].create("inspection", session_id)
@@ -608,6 +649,7 @@ def create_app(
         """Return current progress or the completed summary batch."""
         job = app.config["JOBS"].get(job_id)
         if not job:
+            safe_log(app, "A missing summary job was requested")
             return render_template("notice.html", message="That summary job is no longer available.", tone="error"), 404
         if job["status"] in {"complete", "partial", "error"}:
             if job["type"] == "inspection":
@@ -623,7 +665,7 @@ def create_app(
                 archive = app.config["STORE"].read()
             except ValueError as error:
                 safe_log(app, "Could not render a completed batch", error)
-                return render_template("notice.html", message="The archive could not be read; the original file was kept.", tone="error"), 500
+                return render_template("notice.html", message="Saved items could not be opened. Your data has been kept.", tone="error"), 500
             source = archive["sources"].get(job["source_key"], {})
             filter_text = request.args.get("filter_text", "")[:MAX_FILTER_LENGTH]
             return render_template(
@@ -633,6 +675,8 @@ def create_app(
                 summaries=archive["summaries"],
                 videos=filter_summary_videos(source.get("videos", []), archive["summaries"], filter_text),
                 filter_text=filter_text,
+                error_popup_message="Some videos could not be summarized." if job["failed"] and request.args.get("hide_notice") != "1" else "",
+                dismiss_url=url_for("job_progress", job_id=job_id, hide_notice=1),
             )
         return render_template("job_progress.html", job=job)
 
@@ -677,11 +721,15 @@ def create_app(
                 store.update(lambda archive: archive.__setitem__("summary_preferences", preferences))
                 message = "Summary preferences saved."
         archive = store.read()
+        if tone == "error":
+            safe_log(app, "Summary preference validation failed")
         return render_template(
             "settings.html",
             preferences=archive["summary_preferences"] or DEFAULT_PREFERENCES,
             message=message,
             tone=tone,
+            error_popup_message=message if tone == "error" else "",
+            dismiss_url=url_for("settings"),
         )
 
     @app.post("/chat/<video_id>")
@@ -690,10 +738,12 @@ def create_app(
         archive = app.config["STORE"].read()
         saved = archive["summaries"].get(video_id)
         if not saved:
+            safe_log(app, "A follow-up was requested without a saved summary")
             return render_template("notice.html", message="Summarize this video before starting a chat.", tone="error")
         question = request.form.get("question", "").strip()
         if not question or len(question) > MAX_QUESTION_LENGTH:
-            return render_template("chat_answer.html", question=question, answer="Enter a question up to 1,000 characters.", tone="error")
+            safe_log(app, "A follow-up question failed validation")
+            return render_template("chat_answer.html", question=question, answer="Enter a question up to 1,000 characters.", tone="error", error_popup_message="Enter a question up to 1,000 characters.", dismiss_url=url_for("archive_index"))
         try:
             transcript = app.config["TRANSCRIPT_FETCHER"](video_id)
             session_id = session["usage_session_id"]
@@ -716,14 +766,17 @@ def create_app(
             return render_template("chat_answer.html", question=question, answer=answer, tone="success")
         except (SourceError, SummaryError) as error:
             safe_log(app, f"Video {video_id} follow-up failed", error)
-            return render_template("chat_answer.html", question=question, answer=str(error), tone="error")
+            message = failure_notice(error)
+            return render_template("chat_answer.html", question=question, answer=message, tone="error", error_popup_message=message, dismiss_url=url_for("archive_index"))
         except Exception as error:
             safe_log(app, f"Video {video_id} follow-up failed", error)
             return render_template(
                 "chat_answer.html",
                 question=question,
-                answer="The request failed. Check the local log for the error type.",
+                answer=failure_notice(error),
                 tone="error",
+                error_popup_message=failure_notice(error),
+                dismiss_url=url_for("archive_index"),
             )
 
     return app

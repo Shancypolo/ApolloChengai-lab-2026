@@ -2,9 +2,9 @@
 
 ## Document control
 
-Owner: the local app maintainer. Review this document whenever a prompt, model, input context, source domain, URL behavior, output shape, storage field, dependency, diagnostic, or test changes. Facts below describe the current code; product choices and limitations are called out as assumptions. Last reviewed: 2026-10-22.
+Owner: the local app maintainer. Review this document whenever a prompt, model, input context, source domain, URL behavior, output shape, storage field, dependency, visual asset, diagnostic, or test changes. Facts below describe the current code; product choices and limitations are called out as assumptions. Last reviewed: 2026-10-22.
 
-PageOne is a finished local, single-user loopback app. It has no login, remote deployment, database server, job queue, multi-process lock, or service monitoring. One Flask process owns the jobs, archive lock, and usage meter. Restarting it stops active jobs and clears in-memory session usage; saved archive data remains on disk.
+PageOne is a finished local, single-user loopback app. It has no login, remote deployment, database server, job queue, multi-process lock, or service monitoring. One Flask process owns the jobs, archive lock, and usage meter. Restarting it stops active jobs and clears in-memory session usage; saved archive data remains on disk. The supported `run.py` command can serve a static local failure page even when Flask or another required package is missing.
 
 ## Setup and run
 
@@ -12,30 +12,33 @@ Python 3.10 or newer is required. In this directory, install dependencies direct
 
 ```sh
 python -m pip install -r requirements.txt
-python app.py
+python run.py
 ```
 
 A virtual environment is optional. It is a private folder for this app's installed Python packages, so the install does not affect other projects. To use one, run `python -m venv .venv` and activate it with `.venv\Scripts\Activate.ps1` on Windows PowerShell or `source .venv/bin/activate` on macOS/Linux before installing.
 
-Set `OPENAI_API_KEY` in the active terminal; keep it out of source control. Start with `python app.py` and open `http://127.0.0.1:5000`. The app binds to loopback only. It does not load `.env` files. `PAGEONE_DATA_DIR` changes the local folder for the archive and log; by default they live under `instance/` beside `app.py`.
+Set `OPENAI_API_KEY` in the active terminal; keep it out of source control. Start with `python run.py` and open `http://127.0.0.1:5000`. The app binds to loopback only. It does not load `.env` files. Set `PAGEONE_PORT` to use another local port; `PAGEONE_DATA_DIR` changes the local folder for the archive and log, which otherwise live under `instance/` beside `app.py`.
 
-For offline and browser checks, install `requirements-dev.txt`; Playwright may need a one-time Chromium install with `python -m playwright install chromium`. `tests/visual_test.py` can also use an installed `chromium` executable.
+For offline and browser checks, install `requirements-dev.txt`; `tests/startup_smoke.py` also checks the missing-package notice using standard-library Python; Playwright may need a one-time Chromium install with `python -m playwright install chromium`. `tests/visual_test.py` can also use an installed `chromium` executable.
 
 ## File map
 
 | File or folder | Purpose |
 | --- | --- |
-| `app.py` | Flask routes, local request validation, batch jobs, archive pages, and chat flow. |
+| `app.py` | Flask routes, safe request failures, local logging, batch jobs, archive pages, and chat flow. |
+| `run.py` | Standard-library startup check, loopback installation notice, and normal app launch. |
 | `youtube_source.py` | HTTPS YouTube URL validation, `yt-dlp` metadata listing, English JSON3 captions. |
 | `summary_service.py` | GPT-6 Luna prompts, strict JSON schemas, output checks, title-only topic labels. |
 | `usage_accounting.py` | Responses usage parsing, published-rate arithmetic, in-memory session ledger. |
 | `storage.py` | Versioned local JSON archive, validation, atomic writes. |
 | `templates/` | Jinja2 full-page HTML documents and fragments. |
 | `static/css/pageone.css` | Responsive editorial page styling and locally bundled font faces. |
-| `static/fonts/` and `static/images/` | OFL font files, their license texts, and the generated PageOne monogram. |
-| `design-preview.png` | Image Gen home concept used for visual comparison; it is not loaded by the app. |
+| `static/fonts/` and `static/images/` | OFL font files, their license texts, and the generated two-color PageOne masthead. |
+| `design-preview.png` | Updated Image Gen wide-masthead concept used for visual comparison; it is not loaded by the app. |
+| `templates/error_popup.html` and `templates/startup_error.html` | Script-free failure panel for running pages and missing-package startup. |
 | `tests/test_pageone.py` | Network-free service and route tests using fake providers. |
-| `tests/visual_test.py` | Local Chromium functional and viewport checks with saved screenshots. |
+| `tests/visual_test.py` | Local Chromium functional, error-panel, and viewport checks with saved screenshots. |
+| `tests/startup_smoke.py` | Loopback CLI checks for normal launch and missing-package startup. |
 | `apiTests/` | Existing extraction experiments and a separate live diagnostic. |
 | `apiTests/live_diagnostic.py` | Optional quota-bearing source check or one synthetic summary request. |
 | `instance/pageone.json` | Local archive, ignored by Git. |
@@ -45,11 +48,13 @@ The application uses Python, HTML/Jinja2, and CSS only; there is no application 
 
 ## Visual system and minimal copy
 
-The 2026-10-22 visual revision uses an original Image Gen engraved P, book, and laurel logo at `static/images/pageone-monogram.png`. The generated home concept is retained at `design-preview.png` in the repository; it is a visual reference, not a runtime dependency. The logo is separate from program logic. The app has a narrow icon rail, heavy paired newspaper rules, and locally hosted Bodoni Moda and Cinzel fonts. Home exposes only the logo, URL placeholder, Summarize button, icon rail, and the required compact meter. The Archive index exposes Archive, Search archive, source titles, or Nothing saved yet. Settings exposes Settings, AI summary preferences, the editable preference value, an icon save button, and icon feedback. Dynamic source titles, summaries, errors, and workflow screens remain readable.
+The 2026-10-22 revision uses an Image Gen classical engraved `P. 1` masthead at `static/images/pageone-wordmark.png`. The asset is exactly 2100×900 pixels (21:9) and has only two pixel colors, black and white. A deterministic bilevel conversion removed antialias grays from the generated composition; leaf, type, and printing artifacts came from the generated artwork. `design-preview.png` is the updated wide-page concept and is not a runtime dependency. The previous monogram asset remains in the repository but is no longer loaded by pages.
 
-The chosen font sources are the [Bodoni Moda files and OFL license](https://github.com/google/fonts/tree/main/ofl/bodonimoda) and [Cinzel files and OFL license](https://github.com/google/fonts/tree/main/ofl/cinzel) in the official Google Fonts repository. Cinzel's [family description](https://github.com/google/fonts/blob/main/ofl/cinzel/DESCRIPTION.en_us.html) documents its inspiration in first-century Roman inscriptions. The OFL 1.1 license permits personal and commercial use, modification, and bundling subject to its terms; local license copies are bundled beside the fonts. Font choice and editorial layout are product decisions, not industry requirements. No remote font CDN is needed at runtime.
+CSS scales the masthead with viewport width and height (`dvh`), removes the former 880-pixel search and 1050-pixel page caps, and lets Archive, Settings, results, and filters occupy the available width. At 1500 pixels and above, Settings puts its label beside the editor and archive detail puts the source heading beside the video list. Mobile keeps the search control stacked at very narrow widths and reserves room below content for the fixed meter. The browser may scroll when content cannot fit a short viewport. The icon rail, heavy paired rules, Bodoni Moda, and Cinzel remain. Home exposes the logo, URL placeholder, Summarize button, rail, and required meter; Archive and Settings keep static copy sparse. Source titles and summaries remain visible as content.
 
-The compact meter is an explicit exception to minimal page copy at the user's direction. The visible abbreviations are short; the USD amount and partial asterisk preserve the existing accounting semantics. The sidebar can change width through native `<details>` and CSS; its links stay visible as icons in both states. Browser rendering and form behavior require no app script.
+The font sources are the [Bodoni Moda files and OFL license](https://github.com/google/fonts/tree/main/ofl/bodonimoda) and [Cinzel files and OFL license](https://github.com/google/fonts/tree/main/ofl/cinzel) in the official Google Fonts repository. Cinzel's [family description](https://github.com/google/fonts/blob/main/ofl/cinzel/DESCRIPTION.en_us.html) documents its inspiration in first-century Roman inscriptions. OFL 1.1 permits personal and commercial use, modification, and bundling subject to its terms; local license copies are included. Font choice and editorial layout are product decisions, not industry requirements. No remote font CDN is needed.
+
+The compact session meter remains visible at the bottom left, including over error panels, by explicit user direction. Its abbreviations are product usage data. Page copy avoids assistant identity, coding details, and design requirements. Error pages use an HTML-only `<dialog open>` with a CSS shade. It is a non-modal in-page notice, not a separate browser window; dismissal follows an ordinary link to a new server-rendered page. This preserves the no-JavaScript contract.
 
 ## Runtime flow
 
@@ -61,7 +66,7 @@ The compact meter is an explicit exception to minimal page copy at the user's di
 6. Summary results are collapsed `<details>` rows with a server-side GET search across title, topic, and summary text. Each row can accept a follow-up question. The chat action fetches captions again and sends only that video’s title, transcript, saved summary, recent eight Q&A turns, and current question. It stores the question and answer in the JSON archive.
 7. Archive pages show saved sources, filter source and video titles from the index search, and show all titles, available summaries, title topics, and stored Q&A on each source page. Settings save a reusable preference. The default is “Write a concise academic summary in coherent paragraphs. Explain the central thesis, key arguments, evidence, and limitations.”
 
-Job progress exists only in memory. The HTML progress page refreshes itself every two seconds while its job is pending; terminal jobs render a result or a short error page. Restarting the process loses active job state, but summaries written before restart remain saved.
+Job progress exists only in memory. The HTML progress page refreshes itself every two seconds while its job is pending; terminal jobs render a result or a popup notice. Restarting the process loses active job state, but summaries written before restart remain saved.
 
 ## AI contracts and prompt-injection measures
 
@@ -87,26 +92,29 @@ These controls reduce the attack surface; no prompt can guarantee that a model w
 
 The fixed bottom-left page meter displays the current browser session’s input (`I`), cached input (`C`), output (`O`), reasoning (`R`), total (`T`) tokens, and known USD cost. An asterisk marks partial accounting. Its title text explains the abbreviations; the detailed unreported, incomplete, and unpriced counts remain in Python ledger data and are not shown as long page copy.
 
-As retrieved from the [official OpenAI API pricing page](https://developers.openai.com/api/docs/pricing/) on 2026-10-21, GPT-6 Luna standard rates were $0.10 per million input tokens, $0.01 per million cached input tokens, and $0.50 per million output tokens. The implementation uses integer units of 1/100,000,000 USD per token:
+As rechecked against the [official OpenAI API pricing page](https://developers.openai.com/api/docs/pricing/) and [GPT-6 Luna model page](https://developers.openai.com/api/docs/models/gpt-6-luna) on 2026-10-22, GPT-6 Luna standard rates were $0.10 per million input tokens, $0.01 per million cached input tokens, and $0.50 per million output tokens. The implementation uses integer units of 1/100,000,000 USD per token:
 
 ```text
 uncached_input = input_tokens - cached_tokens
 cost = uncached_input × $0.10 / 1,000,000
      + cached_tokens × $0.01 / 1,000,000
      + output_tokens × $0.50 / 1,000,000
+if input_tokens > 272,000 for a call:
+    double that call's input and cached-input cost
+    multiply that call's output cost by 1.5
 ```
 
 OpenAI usage reports cached tokens as a subset of input and reasoning tokens as a subset of output. The meter displays these subsets separately but counts them once: total tokens are input plus output; reasoning is not charged a second time. The API usage object’s `input_tokens`, `output_tokens`, `total_tokens`, `input_tokens_details.cached_tokens`, and `output_tokens_details.reasoning_tokens` feed the parser. Total is recomputed from valid input/output values if the supplied total is malformed, and the display marks that breakdown partial.
 
 The ledger is keyed by a random Flask browser-session identifier, lives only in RAM, is not written to the archive, evicts sessions after 24 hours idle, is capped at 1,000 tracked sessions, and clears on process restart. The Flask session cookie is not permanent. Missing usage is counted as an unreported attempt. If cached-token detail is missing or invalid, input/output totals remain visible but the call is excluded from known cost; this prevents assuming a cache rate and showing a false exact total. Missing reasoning detail is shown as partial; it does not prevent the token-rate calculation when all input/cache/output counts are valid.
 
-This is exact arithmetic at the published standard token rates available on the reviewed date, not a provider invoice; rate changes or account-level adjustments require updating the constants and rerunning checks. Review the [Responses API reference](https://developers.openai.com/api/reference/resources/responses/methods/create) when the SDK usage contract changes.
+This is exact arithmetic at the published token rates for these request settings on the reviewed date, including the model page's over-272K-input multiplier, not a provider invoice. PageOne does not request extended cache retention or regional processing; special-routing charges and account-level adjustments are outside this meter. Rate or request-setting changes require updating the constants and rerunning checks. Review the [Responses API reference](https://developers.openai.com/api/reference/resources/responses/methods/create) when the SDK usage contract changes.
 
 ## Source and network policy
 
 Allowed source hosts are `youtube.com`, `www.youtube.com`, `m.youtube.com`, `music.youtube.com`, and `youtu.be`, over HTTPS only. The code extracts IDs then constructs its own canonical watch or playlist URL; it does not fetch arbitrary user-supplied URLs. `yt-dlp` runs with no download for metadata listing. Caption retrieval requests English JSON3 subtitle or automatic-caption data with `skip_download=True`, holds the file in a temporary directory, and caps transcript text at 100,000 characters. No video or audio file is requested. There is no cookie jar, account sign-in, or access-control bypass.
 
-This is not the official YouTube Data API. The [YouTube Terms](https://www.youtube.com/t/terms) and [official playlist-items API reference](https://developers.google.com/youtube/v3/docs/playlistItems/list) document the platform’s terms and an approved API route. The app follows the existing `yt-dlp` experiments as a prototype; extraction behavior, service availability, applicable terms, and legal permissions are not guaranteed. Review those conditions before broader use. Private, age-restricted, unavailable, or captionless content can fail. Flat metadata can omit author or publish date.
+This is not the official YouTube Data API. The [YouTube Terms](https://www.youtube.com/t/terms) and [official playlist-items API reference](https://developers.google.com/youtube/v3/docs/playlistItems/list) document the platform’s terms and an approved API route. The app follows the existing `yt-dlp` experiments; extraction behavior, service availability, applicable terms, and legal permissions are not guaranteed. Review those conditions before broader use. Private, age-restricted, unavailable, or captionless content can fail. Flat metadata can omit author or publish date.
 
 ## Storage, privacy, and security boundary
 
@@ -118,26 +126,38 @@ The OpenAI API receives the minimum current-video context for each action plus i
 
 ## Failure behavior and diagnosis
 
-- Blank, insecure, invalid-ID, and lookalike-host links fail before extraction. Mixed video/playlist links ask the user to choose.
-- A YouTube metadata or caption failure shows a short source error. Each failed video in a batch is listed while the worker continues with other selected videos.
-- Topic API failure leaves the source saved and labels the list `Other` with a warning. Missing `OPENAI_API_KEY`, missing packages, API failures, empty content, and malformed model output produce a concise page message; logs contain only safe event/error-type metadata.
-- A malformed archive is left untouched. Back it up and inspect a copy before repair.
-- After a process restart, re-submit an interrupted batch. Already saved summaries are reused by video ID unless explicitly refreshed.
-- No API key, transcript, summary, question, or response body should be pasted into the log to diagnose a problem.
+`run.py` checks for Flask, OpenAI, and yt-dlp before importing the app. If a package is missing or import initialization fails, it writes a concise cause to the launch terminal and rotating `pageone.log`, then serves `templates/startup_error.html` on loopback using Python's standard-library HTTP server. The static page says only that PageOne cannot start, shows the script-free notice panel, and offers Retry. It exposes only the page, CSS, wordmark, and local font files; no directory listing. `python app.py` bypasses this preflight, so `python run.py` is the supported end-user command. If the data folder is unwritable or the port cannot bind, the terminal still reports the failure; a browser notice cannot be served without an available loopback port.
 
-Offline checks make no YouTube or OpenAI requests:
+After launch, `configure_safe_logging()` writes event names and exception class names to both a rotating local file and stderr. Raw provider messages, request bodies, transcripts, credentials, and model output are omitted. Flask routes convert predictable connection, missing-key, missing-package, source, and unexpected failures into short product notices. The open `<dialog>` and CSS shade make the notice immediately visible; Continue performs a normal GET. A failed title-topic call retains the title list with `Other` labels and a warning popup; a summary batch retains successful notes and displays failures after its job finishes. Unexpected route errors are handled before Flask's default traceback page. No script is used.
+
+- Blank, insecure, invalid-ID, and lookalike-host links fail before extraction. Mixed video/playlist links ask which source to use.
+- YouTube metadata and caption failures produce source notices; a missing yt-dlp package is preserved as a setup error. Failed batch videos are listed while remaining selections continue.
+- Missing or offline OpenAI access, empty content, and malformed model output produce safe notices. A failed provider call may be billable even when usage is unavailable; the meter marks that attempt partial.
+- A malformed archive is left untouched. Back it up and inspect a copy before repair.
+- A restart loses active jobs. Already saved summaries are reused by video ID unless refreshed.
+
+Offline fake-client checks do not contact YouTube or OpenAI:
 
 ```sh
-python -m py_compile app.py storage.py youtube_source.py summary_service.py usage_accounting.py tests/test_pageone.py tests/visual_test.py apiTests/live_diagnostic.py
+python -m py_compile app.py run.py storage.py youtube_source.py summary_service.py usage_accounting.py tests/test_pageone.py tests/visual_test.py tests/startup_smoke.py apiTests/live_diagnostic.py
 python -m unittest discover -s tests -v
+python tests/startup_smoke.py
 python tests/visual_test.py
 ```
 
-`python app.py` is the end-user launch path. The live diagnostic has separate `--ai-only`, `--topics-only`, and `--source-only` modes; the first two each make one quota-bearing request with synthetic input, while `--source-only` makes no OpenAI request. With no mode, it attempts the sample YouTube playlist, captions, and a summary. Keep live checks separate from fake-client tests and report their actual result.
+`tests/startup_smoke.py` and `tests/visual_test.py` use loopback HTTP only; the unit suite remains free of network requests. The live diagnostic has separate `--ai-only`, `--topics-only`, and `--source-only` modes; the first two each make one quota-bearing request with synthetic input, while `--source-only` makes no OpenAI request. With no mode, it attempts the sample YouTube playlist, captions, and a summary. Keep live checks separate and record their actual result.
 
 ## Verification record
 
-Update this section only with commands actually run. Earlier checks below are historical evidence from 2026-10-21; replace or supplement them with commands actually run for each new revision:
+Update this section only with commands actually run. Earlier checks below remain historical evidence.
+
+2026-10-22 wide-layout and diagnostics revision:
+
+- Python compilation passed for the five core runtime modules, `run.py`, three test scripts, and live diagnostic. The offline unit suite passed 30 tests, including missing-source-package propagation, safe product failure text, unexpected-error popup/log privacy, long-input USD rates, and nesting depth. No external requests were made by the unit suite.
+- `tests/startup_smoke.py` passed. It used `python -S run.py` to simulate missing packages, confirmed the local HTML notice, stderr message, and rotating log, then launched the installed app through `run.py`. Both checks used loopback only. A missing-package page was also rendered and visually inspected in local Chromium.
+- `tests/visual_test.py` passed with fake providers at 280×940, 320×940, 430×1100, 844×390, 1365×768, and 3440×1100. Screenshots under `/tmp/pageone-visual` were inspected by eye: Home and the `P. 1` image, 3440-pixel Settings and archive split layout, an invalid-link popup, and an offline-AI popup. The latter wrote a `ConnectionError` event to the local log and terminal while leaving title rows available with `Other` topics. No horizontal overflow was found by the browser check. This was local Chromium; cloud browser tools were unavailable.
+- ImageMagick reported `pageone-wordmark.png` as 2100×900 with exactly two colors. The generated design reference was replaced with the new wide-masthead concept. The rendered Home matches its major proportions: wide masthead, near-full-width search, icon rail, paired rules, and fixed meter; the implementation keeps a rectangular form where the concept used rounded corners.
+- One live quota-bearing `--ai-only` GPT-6 Luna/high diagnostic succeeded with 190 input, 0 cached, 65 output, and 0 reasoning tokens; known standard-rate cost was $0.00005150. The synthetic summary text was not printed. A separate live `--source-only` YouTube diagnostic failed to retrieve the sample playlist; the caught cause type was `DownloadError`. It used no OpenAI quota. The fake-client flows remain the functional regression evidence for extraction-dependent pages.
 
 2026-10-22 editorial revision:
 
@@ -160,19 +180,22 @@ Update this section only with commands actually run. Earlier checks below are hi
 
 | Reference | Documented fact used | PageOne choice or assumption |
 | --- | --- | --- |
-| [OpenAI API pricing](https://developers.openai.com/api/docs/pricing/) | Published model rates distinguish input, cached input, and output pricing. | GPT-6 Luna prices on this page were recorded on 2026-10-21 and encoded as exact integer arithmetic. |
+| [OpenAI API pricing](https://developers.openai.com/api/docs/pricing/) and [GPT-6 Luna model page](https://developers.openai.com/api/docs/models/gpt-6-luna) | Standard input, cached-input, and output rates, plus the over-272K-input multiplier, are documented. | Rates were rechecked on 2026-10-22 and encoded as integer arithmetic; extended cache retention and regional processing are not requested. |
 | [OpenAI Responses API reference](https://developers.openai.com/api/reference/resources/responses/methods/create) | Responses include usage information and structured output configuration. | Usage breakdown is read when returned; unknown details are marked partial. |
 | [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses) and [prompt engineering](https://developers.openai.com/api/docs/guides/prompt-engineering) | Structured output constraints and clear instructions are available model controls. | The app uses small strict schemas and treats supplied content as untrusted data. |
 | [OWASP LLM Prompt Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html) | Prompt wording alone is not a dependable injection boundary; least privilege and separation of data/control are relevant. | The app combines fixed instructions, data fields, no tools, output validation, and escaped rendering; none guarantees jailbreak resistance. |
 | [NIST AI 600-1](https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf) | Confabulation is a generative-AI risk. | Output is treated as a reading aid and not an authoritative transcript. |
 | [yt-dlp README](https://github.com/yt-dlp/yt-dlp/blob/master/README.md) | `yt-dlp` documents flat playlist extraction and subtitle options. | It is used to follow the repository’s existing experiments; compatibility and permission are not assured. |
 | [YouTube Terms](https://www.youtube.com/t/terms) and [playlistItems API](https://developers.google.com/youtube/v3/docs/playlistItems/list) | YouTube publishes its terms and an official playlist-listing API. | This app does not use the official API; a future approved integration requires credential and quota design. |
+| [Flask error handling](https://flask.palletsprojects.com/en/stable/errorhandling/) | Flask supports registered handlers and otherwise produces a generic 500 page for unhandled exceptions. | Route exceptions are converted to safe PageOne notices with class-only diagnostics. |
+| [Python logging HOWTO](https://docs.python.org/3/howto/logging.html) | Stream and rotating file handlers can write the same event to terminal and disk. | PageOne records event and type only, avoiding raw provider payloads. |
+| [MDN dialog](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog) and [CSS viewport lengths](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/length) | An HTML `dialog` with `open` is non-modal; `dvh` follows dynamic viewport height. | PageOne uses a CSS shade and server navigation for script-free popup behavior and viewport-scaled layout. |
 | HTML and CSS implementation | Browser-native forms, `<details>`, and timed document refresh require no application script. | They are used for sorting/filter posts, collapsible rows, and progress refreshes to meet the no-JavaScript request. |
 
-The official pricing page was retrieved for the previous handoff on 2026-10-21. Font license and family pages were consulted on 2026-10-22. The other links are maintainer references for provider behavior, injection limits, source policy, and the existing extraction method. Provider or platform pages can change; recheck before materially changing those contracts.
+The pricing and model pages, Flask guide, Python logging guide, MDN dialog/viewport guides, and font sources were consulted on 2026-10-22. The other links are maintainer references for provider behavior, injection limits, source policy, and the existing extraction method. Provider or platform pages can change; recheck before materially changing those contracts.
 
 ## Ownership, maintenance, and acceptance
 
-The local operator owns the API key, archive backups, and update policy. Keep offline tests network-free. Before dependency changes, run compilation, fake-client tests, browser checks, and a CLI smoke; run live diagnostics separately and identify quota use. Update prompts, schemas, output normalization, cost constants, and this handoff together when contracts change.
+The local operator owns the API key, archive backups, and update policy. Keep the unit suite free of external network requests. Before dependency changes, run compilation, fake-client tests, browser checks, and the supported `run.py` CLI smoke; run live diagnostics separately and identify quota use. Update prompts, schemas, output normalization, cost constants, visual assets, startup behavior, and this handoff together when contracts change.
 
-Acceptance means: local-only startup; source title and topic load before summary; topics are based on title strings only and weak titles become `Other`; HTTPS allowlisting; ambiguous-link progression; title sorting/filtering and all/none/individual selection; progress and summary archive; no repeat unless refreshed; dynamic chat and preference persistence; no transcript in archive or logs; session-only usage counts and known USD math; malformed response and missing-key paths; no application JavaScript or script tags; compile, offline, local visual, and CLI checks accurately recorded; cloud browser unavailability clearly stated.
+Acceptance means: local-only startup, including a visible missing-package fallback through `run.py`; source title and topic load before summary; topics based on title strings only and weak titles grouped as `Other`; HTTPS allowlisting; ambiguous-link progression; title sorting/filtering and all/none/individual selection; progress and summary archive; no repeat unless refreshed; dynamic chat and preference persistence; no transcript or raw provider error in archive/logs; safe failure notices in the browser, rotating log, and terminal; the exact two-color 21:9 masthead and fluid wide layout; session-only usage counts and known USD math; no application JavaScript or script tags; compile, offline, local visual, and CLI checks accurately recorded; cloud browser unavailability clearly stated.

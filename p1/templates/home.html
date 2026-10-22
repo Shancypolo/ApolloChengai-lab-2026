@@ -2,7 +2,7 @@
 {% block title %}PageOne{% endblock %}
 {% block content %}
 <section class="home-hero">
-  <img class="hero-logo" src="{{ url_for('static', filename='images/pageone-monogram.png') }}" alt="">
+  <img class="hero-logo" src="{{ url_for('static', filename='images/pageone-wordmark.png') }}" alt="">
   <form class="search-form" method="post" action="{{ url_for('inspect_source') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input id="source-url" name="source_url" type="url" placeholder="Paste YouTube URL" required>

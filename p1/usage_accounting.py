@@ -8,6 +8,7 @@ from typing import Any
 
 
 PRICE_UNITS_PER_TOKEN = {"input": 10, "cached_input": 1, "output": 50}
+LONG_INPUT_THRESHOLD = 272_000
 USD_UNITS_PER_DOLLAR = 100_000_000
 SESSION_IDLE_SECONDS = 86_400
 MAX_TRACKED_SESSIONS = 1_000
@@ -65,11 +66,14 @@ def usage_from_response(response: Any) -> dict[str, Any] | None:
 def cost_units(usage: dict[str, Any]) -> int:
     """Calculate cost in exact 1e-8 USD units from published token rates."""
     uncached_tokens = usage["input_tokens"] - usage["cached_tokens"]
-    return (
+    input_cost = (
         uncached_tokens * PRICE_UNITS_PER_TOKEN["input"]
         + usage["cached_tokens"] * PRICE_UNITS_PER_TOKEN["cached_input"]
-        + usage["output_tokens"] * PRICE_UNITS_PER_TOKEN["output"]
     )
+    output_cost = usage["output_tokens"] * PRICE_UNITS_PER_TOKEN["output"]
+    if usage["input_tokens"] > LONG_INPUT_THRESHOLD:
+        return input_cost * 2 + output_cost * 3 // 2
+    return input_cost + output_cost
 
 
 def format_usd(units: int) -> str:

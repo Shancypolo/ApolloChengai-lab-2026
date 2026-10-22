@@ -116,6 +116,11 @@ def main() -> None:
             page.goto(base_url, wait_until="networkidle")
             assert_no_embedded_scripts_or_aria(page)
             page.screenshot(path=str(screenshots_directory / "home-wide.png"), full_page=True)
+            page.locator("#source-url").fill("https://example.com/watch?v=GmBG-26_Izw")
+            page.locator(".search-form button").click()
+            page.locator(".failure-dialog").wait_for()
+            page.screenshot(path=str(screenshots_directory / "error-popup-wide.png"), full_page=True)
+            page.locator(".failure-dialog a").click()
             page.locator('.sidebar-nav a[href="/archive"]').click()
             page.get_by_text("Nothing saved yet").wait_for()
             page.screenshot(path=str(screenshots_directory / "archive-empty-wide.png"), full_page=True)
@@ -212,6 +217,28 @@ def main() -> None:
             page.locator('.settings-feedback[title="Summary preferences saved."]').wait_for()
             page.screenshot(path=str(screenshots_directory / "settings-mobile.png"), full_page=True)
             assert_no_horizontal_overflow(page, 320, 940)
+            page.set_viewport_size({"width": 3440, "height": 1100})
+            page.screenshot(path=str(screenshots_directory / "settings-ultrawide.png"), full_page=True)
+            assert_no_horizontal_overflow(page, 3440, 1100)
+            page.locator('.sidebar-nav a[href="/archive"]').click()
+            page.screenshot(path=str(screenshots_directory / "archive-ultrawide.png"), full_page=True)
+            page.locator(".archive-row").first.click()
+            page.screenshot(path=str(screenshots_directory / "archive-detail-ultrawide.png"), full_page=True)
+            assert_no_horizontal_overflow(page, 3440, 1100)
+            page.set_viewport_size({"width": 320, "height": 940})
+
+            def offline_topic_function(titles: list[str], usage_callback=None) -> list[str]:
+                """Simulate an API connection failure without using the network."""
+                raise ConnectionError("synthetic offline service")
+
+            app.config["TOPIC_FUNCTION"] = offline_topic_function
+            page.locator('.sidebar-nav a[href="/"]').click()
+            page.locator("#source-url").fill("https://www.youtube.com/playlist?list=PLVANSOs5ny50")
+            page.locator(".search-form button").click()
+            page.locator(".failure-dialog").wait_for(timeout=15_000)
+            assert "Connection unavailable" in page.locator(".failure-dialog").inner_text()
+            page.screenshot(path=str(screenshots_directory / "offline-api-popup-mobile.png"), full_page=True)
+            assert "ConnectionError" in (Path(temporary_directory.name) / "pageone.log").read_text(encoding="utf-8")
             browser.close()
         print(f"Browser checks passed. Screenshots: {screenshots_directory}")
     finally:

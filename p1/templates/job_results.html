@@ -23,4 +23,5 @@
   {% if not videos %}<p class="muted">No video summaries match this search.</p>{% endif %}
   <p><a class="text-link" href="{{ url_for('archive_index') }}">Open archive ></a></p>
 </section>
+{% include "error_popup.html" %}
 {% endblock %}

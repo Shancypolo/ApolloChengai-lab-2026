@@ -17,7 +17,7 @@ import sys
 APP_DIRECTORY = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP_DIRECTORY))
 
-from app import create_app, filter_summary_videos
+from app import create_app, failure_notice, filter_summary_videos
 from storage import DEFAULT_PREFERENCES, JsonStore
 from summary_service import (
     CHAT_INSTRUCTIONS,
@@ -31,8 +31,8 @@ from summary_service import (
     summarize_video,
     title_has_topic_clues,
 )
-from usage_accounting import SessionUsageLedger, format_usd, usage_from_response
-from youtube_source import SourceError, normalize_date, parse_caption_json, parse_youtube_url
+from usage_accounting import SessionUsageLedger, cost_units, format_usd, usage_from_response
+from youtube_source import SourceError, fetch_source, normalize_date, parse_caption_json, parse_youtube_url
 
 
 SAMPLE_USAGE = {
@@ -142,6 +142,37 @@ class PageOneCoreTests(unittest.TestCase):
         """Require OPENAI_API_KEY only when the client is constructed."""
         with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(SummaryError, "OPENAI_API_KEY"):
             create_openai_client()
+
+    def test_failures_use_product_notices_without_exposing_configuration(self):
+        """Keep connection and setup details in diagnostics, not page copy."""
+        self.assertIn("Connection unavailable", failure_notice(ConnectionError("private endpoint")))
+        message = failure_notice(SummaryError("Set OPENAI_API_KEY before requesting an AI summary."))
+        self.assertNotIn("OPENAI_API_KEY", message)
+        self.assertIn("API key", message)
+
+    def test_missing_source_package_remains_a_setup_failure(self):
+        """Preserve the missing-package cause during source extraction."""
+        with patch("youtube_source._youtube_dl", side_effect=SourceError("Install the app dependencies to access YouTube.")):
+            with self.assertRaisesRegex(SourceError, "Install"):
+                fetch_source("video", "GmBG-26_Izw")
+
+    def test_unexpected_request_uses_popup_and_safe_log(self):
+        """Show a notice while omitting exception text from local diagnostics."""
+        with tempfile.TemporaryDirectory() as folder:
+            app = create_app(folder)
+
+            @app.get("/failure-check")
+            def failure_check():
+                """Raise a private sample error before any request is served."""
+                raise RuntimeError("private example payload")
+
+            response = app.test_client().get("/failure-check")
+            self.assertEqual(response.status_code, 500)
+            self.assertIn(b'<dialog open class="failure-dialog">', response.data)
+            self.assertNotIn(b"private example payload", response.data)
+            log_text = (Path(folder) / "pageone.log").read_text(encoding="utf-8")
+            self.assertIn("RuntimeError", log_text)
+            self.assertNotIn("private example payload", log_text)
 
     def test_summary_contract_uses_gpt6_high_no_tools_and_untrusted_input(self):
         """Send one structured no-tool summary request with source data."""
@@ -264,6 +295,13 @@ class PageOneCoreTests(unittest.TestCase):
         self.assertEqual(snapshot["cached_tokens"], 200)
         self.assertEqual(format_usd(1), "$0.00000001")
         self.assertFalse(snapshot["is_partial"])
+
+    def test_long_input_pricing_uses_documented_full_request_multipliers(self):
+        """Apply the model's surcharge above 272,000 input tokens."""
+        at_limit = {"input_tokens": 272_000, "cached_tokens": 1_000, "output_tokens": 100}
+        above_limit = {**at_limit, "input_tokens": 272_001}
+        self.assertEqual(cost_units(at_limit), 271_000 * 10 + 1_000 + 100 * 50)
+        self.assertEqual(cost_units(above_limit), (271_001 * 10 + 1_000) * 2 + 100 * 75)
 
     def test_session_cost_is_partial_if_cache_or_usage_is_unknown(self):
         """Avoid presenting missing usage or cache pricing as exact cost."""
@@ -516,7 +554,7 @@ class NestingDepthTests(unittest.TestCase):
             return max([current_depth, *(walk(child, current_depth) for child in ast.iter_child_nodes(node))])
 
         depths = {}
-        runtime_files = ("app.py", "storage.py", "youtube_source.py", "summary_service.py", "usage_accounting.py")
+        runtime_files = ("app.py", "run.py", "storage.py", "youtube_source.py", "summary_service.py", "usage_accounting.py")
         for file_name in runtime_files:
             tree = ast.parse((APP_DIRECTORY / file_name).read_text(encoding="utf-8"))
             depths[file_name] = walk(tree)

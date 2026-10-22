@@ -99,6 +99,8 @@ def fetch_source(source_kind: str, source_id: str) -> dict[str, Any]:
         try:
             with _youtube_dl(options) as downloader:
                 info = downloader.extract_info(canonical_video_url(source_id), download=False)
+        except SourceError:
+            raise
         except Exception as error:
             raise SourceError("YouTube could not return that public video.") from error
         if not isinstance(info, dict):
@@ -119,6 +121,8 @@ def fetch_source(source_kind: str, source_id: str) -> dict[str, Any]:
     try:
         with _youtube_dl(options) as downloader:
             info = downloader.extract_info(canonical_playlist_url(source_id), download=False)
+    except SourceError:
+        raise
     except Exception as error:
         raise SourceError("YouTube could not return that public playlist.") from error
     if not isinstance(info, dict):

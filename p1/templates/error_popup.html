@@ -1,0 +1,9 @@
+{% if error_popup_message %}
+<div class="failure-shade"></div>
+<dialog open class="failure-dialog">
+  <div class="failure-rule"></div>
+  <h2>Notice</h2>
+  <p>{{ error_popup_message }}</p>
+  <a class="button button-dark" href="{{ dismiss_url or url_for('home') }}">Continue</a>
+</dialog>
+{% endif %}

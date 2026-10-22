@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}PageOne notice{% endblock %}
 {% block content %}
-<section class="notice notice-{{ tone|default('error') }} notice-page">{{ message }}</section>
-<p><a class="text-link" href="{{ url_for('home') }}">Return Home ></a></p>
+{% set error_popup_message = message %}
+{% set dismiss_url = url_for('home') %}
+{% include "error_popup.html" %}
 {% endblock %}

@@ -6,7 +6,7 @@
   <input id="archive-search" type="search" name="q" value="{{ query }}" maxlength="200" placeholder="Search archive">
   <button type="submit" title="Search archive">⌕</button>
 </form>
-{% if not sources %}<div class="empty-state"><img src="{{ url_for('static', filename='images/pageone-monogram.png') }}" alt=""><h2>Nothing saved yet</h2></div>
+{% if not sources %}<div class="empty-state"><img src="{{ url_for('static', filename='images/pageone-wordmark.png') }}" alt=""><h2>Nothing saved yet</h2></div>
 {% else %}
 <section class="archive-list">
   {% for source in sources %}
