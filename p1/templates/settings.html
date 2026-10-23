@@ -5,9 +5,14 @@
 <section class="page-heading editorial-heading"><h1>Settings</h1></section>
 <p class="file-caption">Error log file: {{ log_file }}</p>
 <section class="settings-panel">
-  <form method="post" action="{{ url_for('settings') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <form method="post" action="{{ url_for('settings') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="settings_form" value="yes">
     <label class="field-title" for="summary-preferences">AI summary preferences</label>
     <textarea id="summary-preferences" name="summary_preferences" rows="8" maxlength="2000" required>{{ preferences }}</textarea>
+    <div class="general-settings"><h2>General</h2>
+      <label>Default playlist sort <select name="default_playlist_sort">{% for value, label in playlist_sort_options %}<option value="{{ value }}" {% if general_settings.default_playlist_sort == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+      <label>Archive order <select name="archive_sort"><option value="recent" {% if general_settings.archive_sort == 'recent' %}selected{% endif %}>Recent</option><option value="title" {% if general_settings.archive_sort == 'title' %}selected{% endif %}>Title</option></select></label>
+      <label class="small-check"><input type="checkbox" name="auto_summarize_new" value="yes" {% if general_settings.auto_summarize_new %}checked{% endif %}> Summarize new videos when a saved playlist is checked again</label>
+    </div>
     <div class="settings-actions"><button class="button button-dark" type="submit" title="Save preferences">✓</button>{% if message %}<span class="settings-feedback {% if tone == 'error' %}is-error{% endif %}" title="{{ message }}">{% if tone == 'error' %}!{% else %}✓{% endif %}</span>{% endif %}</div>
   </form>
 </section>

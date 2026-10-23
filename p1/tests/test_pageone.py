@@ -67,7 +67,7 @@ def make_video_source(kind: str, source_id: str) -> dict:
         "source_key": f"{kind}:{source_id}",
         "kind": kind,
         "id": source_id,
-        "title": "A playlist of ideas" if kind == "playlist" else rows[0][1],
+        "title": "A playlist of ideas" if kind == "playlist" else rows[0]["title"],
         "url": "https://www.youtube.com/playlist?list=PLVANSOs5ny50",
         "videos": rows if kind == "playlist" else rows[:1],
         "omitted_video_entries": 0,
@@ -99,6 +99,30 @@ class FakeOpenAI:
 
 class PageOneCoreTests(unittest.TestCase):
     """Check URL validation, storage, model contracts, and usage parsing."""
+
+    def test_version_one_archive_upgrades_without_erasing_saved_bytes(self):
+        """Read old sources into editable lists and write version 2 later."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "pageone.json"
+            old = {
+                "schema_version": 1, "summary_preferences": "Keep evidence.",
+                "sources": {"playlist:PLVANSOs5ny50": make_video_source("playlist", "PLVANSOs5ny50")},
+                "summaries": {"GmBG-26_Izw": {
+                    "video_id": "GmBG-26_Izw", "title": "A careful study of evidence",
+                    "source_keys": ["playlist:PLVANSOs5ny50"], "summary": "Old summary.",
+                    "topics": ["Evidence"], "chat": [{"question": "Why?", "answer": "Evidence."}],
+                }},
+            }
+            path.write_text(json.dumps(old), encoding="utf-8")
+            store = JsonStore(path)
+            upgraded = store.read()
+            self.assertEqual(upgraded["schema_version"], 2)
+            self.assertEqual(upgraded["summary_preferences"], "Keep evidence.")
+            self.assertEqual(len(upgraded["summary_lists"]["playlist:PLVANSOs5ny50"]["video_ids"]), 3)
+            self.assertEqual(upgraded["summaries"]["GmBG-26_Izw"]["chat"][0]["answer"], "Evidence.")
+            self.assertIn('"schema_version": 1', path.read_text(encoding="utf-8"))
+            store.update(lambda archive: archive["settings"].__setitem__("archive_sort", "title"))
+            self.assertIn('"schema_version": 2', path.read_text(encoding="utf-8"))
 
     def test_url_allowlist_and_ambiguous_video_playlist(self):
         """Accept YouTube HTTPS sources and retain both identifiers."""
@@ -556,6 +580,174 @@ class PageOneRouteTests(unittest.TestCase):
         """Show the configured archive and log file names on their pages."""
         self.assertIn(str(Path(self.folder.name) / "pageone.json").encode(), self.client.get("/archive").data)
         self.assertIn(str(Path(self.folder.name) / "pageone.log").encode(), self.client.get("/settings").data)
+
+    def test_custom_lists_copy_move_and_delete_without_duplication(self):
+        """Change memberships while keeping one canonical summary and chat."""
+        self.inspect_playlist()
+        self.submit_summary()
+        first = self.client.post("/lists", data={"csrf_token": self.csrf, "title": "Reading desk"})
+        second = self.client.post("/lists", data={"csrf_token": self.csrf, "title": "Later"})
+        first_id = first.headers["Location"].split("/archive/")[1]
+        second_id = second.headers["Location"].split("/archive/")[1]
+        copy = self.client.post("/archive/playlist:PLVANSOs5ny50/transfer", data={
+            "csrf_token": self.csrf, "video_id": "GmBG-26_Izw", "target_list": first_id, "action": "copy",
+        })
+        self.assertEqual(copy.status_code, 302)
+        archive = self.app.config["STORE"].read()
+        self.assertIn("GmBG-26_Izw", archive["summary_lists"][first_id]["video_ids"])
+        self.assertIn("GmBG-26_Izw", archive["summary_lists"]["playlist:PLVANSOs5ny50"]["video_ids"])
+        moved = self.client.post(f"/archive/{first_id}/transfer", data={
+            "csrf_token": self.csrf, "video_id": "GmBG-26_Izw", "target_list": second_id, "action": "move",
+        })
+        self.assertEqual(moved.status_code, 302)
+        archive = self.app.config["STORE"].read()
+        self.assertNotIn("GmBG-26_Izw", archive["summary_lists"][first_id]["video_ids"])
+        self.assertIn("GmBG-26_Izw", archive["summary_lists"][second_id]["video_ids"])
+        self.assertEqual(len(archive["summaries"]), 1)
+        rejected = self.client.post(f"/lists/{second_id}/delete", data={"csrf_token": self.csrf})
+        self.assertIn(b"Confirm the list deletion", rejected.data)
+        self.client.post(f"/lists/{second_id}/delete", data={"csrf_token": self.csrf, "confirm": "yes"})
+        self.assertIn("GmBG-26_Izw", self.app.config["STORE"].read()["summaries"])
+        self.client.post("/videos/GmBG-26_Izw/delete", data={"csrf_token": self.csrf, "confirm": "yes"})
+        archive = self.app.config["STORE"].read()
+        self.assertNotIn("GmBG-26_Izw", archive["summaries"])
+        self.assertNotIn("GmBG-26_Izw", archive["summary_lists"]["playlist:PLVANSOs5ny50"]["video_ids"])
+
+    def test_home_adds_only_single_video_to_existing_list(self):
+        """Give a playlist its own list and add one video to the chosen list."""
+        created = self.client.post("/lists", data={"csrf_token": self.csrf, "title": "My notes"})
+        list_id = created.headers["Location"].split("/archive/")[1]
+
+        def one_video(kind, source_id):
+            """Return one row only for a playlist with a single video."""
+            source = make_video_source(kind, source_id)
+            if kind == "playlist" and source_id == "PLVANSOs5ny51":
+                source["videos"] = source["videos"][:1]
+            return source
+
+        self.app.config["SOURCE_FETCHER"] = one_video
+        playlist_job, _ = self.submit_and_wait("/inspect", {
+            "csrf_token": self.csrf, "source_url": "https://www.youtube.com/playlist?list=PLVANSOs5ny50",
+            "target_list": list_id,
+        })
+        self.assertEqual(playlist_job["status"], "complete")
+        archive = self.app.config["STORE"].read()
+        self.assertEqual(archive["summary_lists"][list_id]["video_ids"], [])
+        self.assertIn("playlist:PLVANSOs5ny50", archive["summary_lists"])
+        self.submit_and_wait("/inspect", {
+            "csrf_token": self.csrf, "source_url": "https://www.youtube.com/playlist?list=PLVANSOs5ny51",
+            "target_list": list_id,
+        })
+        archive = self.app.config["STORE"].read()
+        self.assertNotIn("playlist:PLVANSOs5ny51", archive["summary_lists"])
+        self.assertEqual(archive["summary_lists"][list_id]["video_ids"], ["GmBG-26_Izw"])
+        job, response = self.submit_and_wait("/inspect", {
+            "csrf_token": self.csrf, "source_url": "https://www.youtube.com/watch?v=GmBG-26_Izw",
+            "target_list": list_id,
+        })
+        self.assertEqual(job["status"], "complete")
+        archive = self.app.config["STORE"].read()
+        self.assertEqual(archive["summary_lists"][list_id]["video_ids"], ["GmBG-26_Izw"])
+        self.assertIn("GmBG-26_Izw", archive["summaries"])
+        self.assertIn(b"A careful study", response.data)
+        self.assertNotIn(b"Single video summaries", self.client.get("/archive").data)
+
+    def test_repeat_playlist_adds_new_summaries_and_requires_refresh_approval(self):
+        """Summarize only new IDs until the explicit replace box is checked."""
+        self.inspect_playlist()
+        self.submit_summary()
+        old_summary = self.app.config["STORE"].read()["summaries"]["GmBG-26_Izw"]["summary"]
+
+        def expanded_source(kind, source_id):
+            """Add one newly published fixture video to the old playlist."""
+            source = make_video_source(kind, source_id)
+            source["videos"].append({
+                "id": "cDefGH_3456", "title": "New evidence lecture",
+                "url": "https://www.youtube.com/watch?v=cDefGH_3456",
+                "published_at": "2026-10-23", "author": "C. Author", "topic": "Other",
+            })
+            return source
+
+        self.app.config["SOURCE_FETCHER"] = expanded_source
+        job, _ = self.submit_and_wait("/inspect", {
+            "csrf_token": self.csrf, "source_url": "https://www.youtube.com/playlist?list=PLVANSOs5ny50",
+        })
+        self.assertEqual(job["status"], "complete")
+        archive = self.app.config["STORE"].read()
+        self.assertEqual(archive["summaries"]["GmBG-26_Izw"]["summary"], old_summary)
+        self.assertIn("cDefGH_3456", archive["summaries"])
+        self.assertIn("cDefGH_3456", archive["summary_lists"]["playlist:PLVANSOs5ny50"]["video_ids"])
+        self.assertEqual(len(self.summary_calls), 2)
+
+        def replaced_summary(title, transcript, preferences, usage_callback=None):
+            """Mark each approved replacement with changed fixture prose."""
+            self.summary_calls.append((title, transcript, preferences))
+            return {"summary": "Approved replacement."}
+
+        self.app.config["SUMMARY_FUNCTION"] = replaced_summary
+        self.submit_and_wait("/inspect", {
+            "csrf_token": self.csrf, "source_url": "https://www.youtube.com/playlist?list=PLVANSOs5ny50",
+            "replace_saved": "yes",
+        })
+        archive = self.app.config["STORE"].read()
+        self.assertEqual(archive["summaries"]["GmBG-26_Izw"]["summary"], "Approved replacement.")
+        self.assertEqual(len(self.summary_calls), 6)
+
+    def test_general_settings_persist_and_control_repeat_behavior(self):
+        """Save display sorts and disable automatic new-video summaries."""
+        response = self.client.post("/settings", data={
+            "csrf_token": self.csrf, "settings_form": "yes",
+            "summary_preferences": "Keep evidence visible.",
+            "default_playlist_sort": "title", "archive_sort": "title",
+        })
+        self.assertIn(b"Summary preferences saved", response.data)
+        saved = self.app.config["STORE"].read()["settings"]
+        self.assertEqual(saved, {
+            "default_playlist_sort": "title", "archive_sort": "title", "auto_summarize_new": False,
+        })
+        self.inspect_playlist()
+        self.assertIn(b'value="title"', self.client.get("/settings").data)
+        source_page = self.client.get("/sources/playlist:PLVANSOs5ny50")
+        self.assertIn(b'name="sort_by" value="title"', source_page.data)
+
+        def expanded_source(kind, source_id):
+            """Add one new item to a repeat playlist fixture."""
+            source = make_video_source(kind, source_id)
+            source["videos"].append({
+                "id": "cDefGH_3456", "title": "A new research note",
+                "url": "https://www.youtube.com/watch?v=cDefGH_3456",
+                "published_at": "2026-10-23", "author": "C. Author", "topic": "Other",
+            })
+            return source
+
+        self.app.config["SOURCE_FETCHER"] = expanded_source
+        self.submit_and_wait("/inspect", {
+            "csrf_token": self.csrf, "source_url": "https://www.youtube.com/playlist?list=PLVANSOs5ny50",
+        })
+        archive = self.app.config["STORE"].read()
+        self.assertIn("cDefGH_3456", archive["summary_lists"]["playlist:PLVANSOs5ny50"]["video_ids"])
+        self.assertNotIn("cDefGH_3456", archive["summaries"])
+
+    def test_playlist_recheck_keeps_manual_moves_and_recreates_deleted_list(self):
+        """Keep a moved title out until its list is explicitly recreated."""
+        self.inspect_playlist()
+        created = self.client.post("/lists", data={"csrf_token": self.csrf, "title": "Selected"})
+        list_id = created.headers["Location"].split("/archive/")[1]
+        moved = self.client.post("/archive/playlist:PLVANSOs5ny50/transfer", data={
+            "csrf_token": self.csrf, "video_id": "GmBG-26_Izw", "target_list": list_id,
+            "action": "move",
+        })
+        self.assertEqual(moved.status_code, 302)
+        self.inspect_playlist()
+        archive = self.app.config["STORE"].read()
+        self.assertNotIn("GmBG-26_Izw", archive["summary_lists"]["playlist:PLVANSOs5ny50"]["video_ids"])
+        self.assertIn("GmBG-26_Izw", archive["summary_lists"][list_id]["video_ids"])
+        self.client.post("/lists/playlist:PLVANSOs5ny50/delete", data={
+            "csrf_token": self.csrf, "confirm": "yes",
+        })
+        self.inspect_playlist()
+        restored = self.app.config["STORE"].read()["summary_lists"]["playlist:PLVANSOs5ny50"]
+        self.assertEqual(len(restored["video_ids"]), 3)
 
     def test_csrf_blank_preferences_and_empty_selection_are_reported(self):
         """Reject missing form tokens and explain blank preference or selection."""

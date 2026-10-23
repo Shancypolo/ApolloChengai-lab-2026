@@ -7,12 +7,15 @@
   <button type="submit" title="Search archive">⌕</button>
 </form>
 <p class="file-caption">Archive file: {{ archive_file }}</p>
-{% if not sources %}<div class="empty-state"><h2>Nothing saved yet</h2></div>
-{% else %}
-<section class="archive-list">
-  {% for source in sources %}
-  <a class="archive-row" href="{{ url_for('archive_detail', source_key=source.source_key) }}"><span class="archive-item"><strong>{{ source.title }}</strong></span><span class="archive-arrow"></span></a>
-  {% endfor %}
-</section>
-{% endif %}
+<form class="create-list-form" method="post" action="{{ url_for('create_summary_list') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input name="title" maxlength="120" placeholder="New summary list" required>
+  <button class="text-button" type="submit">Create list →</button>
+</form>
+{% if not groups.playlists and not groups.custom and not groups.single %}<div class="empty-state"><h2>Nothing saved yet</h2></div>{% endif %}
+{% for group_title, rows in [('Playlist summaries', groups.playlists), ('Summary lists', groups.custom), ('Single video summaries', groups.single)] %}
+{% if rows %}<section class="archive-group"><h2>{{ group_title }}</h2><div class="archive-list">
+  {% for source in rows %}<a class="archive-row" href="{{ url_for('archive_detail', source_key=source.source_key) }}"><span class="archive-item"><strong>{{ source.title }}</strong></span><span class="archive-arrow"></span></a>{% endfor %}
+</div></section>{% endif %}
+{% endfor %}
 {% endblock %}

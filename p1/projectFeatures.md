@@ -13,6 +13,9 @@
 - Collapsed summaries in batch results and archive detail can be searched by title, topic, or summary text without JavaScript.
 - Summary and follow-up prompts use English. Follow-ups show loading progress, fetch captions, and store only the question and answer.
 - Local JSON archive stores source rows, title topics, summaries, chat turns, timestamps, and summary preferences. Archive and Settings show the archive and error-log file paths.
+- Archive groups playlist, custom-list, and single-video summaries. Lists can be created or deleted; videos can be copied or moved between lists; a saved video summary can be deleted separately.
+- Home can add a video link or one-video playlist to an existing list; larger playlists get their own list. Repeat playlist checks add new IDs and summarize them by default, while replacing existing text requires the Home approval checkbox.
+- General settings choose the default playlist sort, archive sort, and automatic new-video summary behavior.
 - Multiple playlists can be saved side by side; automatic startup refresh of newly added playlist videos remains deferred.
 - Session token counts and estimated model cost stay in process memory and are discarded after the browser session or ledger expiry.
 - Rotating diagnostic logs omit transcript text, prompts, model output, and credentials.

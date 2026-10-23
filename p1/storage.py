@@ -14,21 +14,55 @@ DEFAULT_PREFERENCES = (
     "Write a concise academic summary in coherent paragraphs. Explain the central "
     "thesis, key arguments, evidence, and limitations."
 )
+DEFAULT_SETTINGS = {
+    "default_playlist_sort": "original",
+    "archive_sort": "recent",
+    "auto_summarize_new": True,
+}
+PLAYLIST_SORT_OPTIONS = {"original", "published_at", "author", "topic", "title"}
+ARCHIVE_SORT_OPTIONS = {"recent", "title"}
 
 
 def empty_archive() -> dict[str, Any]:
     """Return a fresh archive with the current settings defaults."""
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "summary_preferences": DEFAULT_PREFERENCES,
+        "settings": dict(DEFAULT_SETTINGS),
         "sources": {},
         "summaries": {},
+        "summary_lists": {},
     }
+
+
+def upgrade_archive(value: Any) -> Any:
+    """Read old archive files as version 2 without changing their disk bytes."""
+    if not isinstance(value, dict) or value.get("schema_version") != 1:
+        return value
+    upgraded = {**value, "schema_version": 2, "settings": dict(DEFAULT_SETTINGS), "summary_lists": {}}
+    for source_key, source in value.get("sources", {}).items():
+        if not isinstance(source, dict) or source.get("kind") != "playlist":
+            continue
+        videos = source.get("videos", [])
+        if not isinstance(videos, list):
+            continue
+        upgraded["summary_lists"][source_key] = {
+            "id": source_key,
+            "title": str(source.get("title") or "Untitled playlist"),
+            "kind": "playlist",
+            "source_key": source_key,
+            "video_ids": list(dict.fromkeys(
+                video["id"] for video in videos if isinstance(video, dict) and isinstance(video.get("id"), str)
+            )),
+            "created_at": str(source.get("created_at") or ""),
+            "updated_at": str(source.get("updated_at") or ""),
+        }
+    return upgraded
 
 
 def validate_archive(value: Any) -> dict[str, Any]:
     """Reject malformed files before they can replace saved user data."""
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
+    if not isinstance(value, dict) or value.get("schema_version") != 2:
         raise ValueError("The archive file has an unsupported format.")
     if not isinstance(value.get("sources"), dict):
         raise ValueError("The archive source list is malformed.")
@@ -36,6 +70,30 @@ def validate_archive(value: Any) -> dict[str, Any]:
         raise ValueError("The archive summary list is malformed.")
     if not isinstance(value.get("summary_preferences"), str):
         raise ValueError("The saved summary preference is malformed.")
+    settings = value.get("settings")
+    if not isinstance(settings, dict):
+        raise ValueError("The saved settings are malformed.")
+    if settings.get("default_playlist_sort") not in PLAYLIST_SORT_OPTIONS:
+        raise ValueError("The saved playlist sort is malformed.")
+    if settings.get("archive_sort") not in ARCHIVE_SORT_OPTIONS:
+        raise ValueError("The saved archive sort is malformed.")
+    if type(settings.get("auto_summarize_new")) is not bool:
+        raise ValueError("The saved automatic summary setting is malformed.")
+    lists = value.get("summary_lists")
+    if not isinstance(lists, dict):
+        raise ValueError("The saved summary lists are malformed.")
+    for list_id, summary_list in lists.items():
+        if not isinstance(list_id, str) or not isinstance(summary_list, dict):
+            raise ValueError("A saved summary list is malformed.")
+        if summary_list.get("id") != list_id or summary_list.get("kind") not in {"playlist", "custom"}:
+            raise ValueError("A saved summary list is malformed.")
+        if not isinstance(summary_list.get("title"), str) or not summary_list["title"].strip():
+            raise ValueError("A saved summary list title is malformed.")
+        video_ids = summary_list.get("video_ids")
+        if not isinstance(video_ids, list) or not all(isinstance(item, str) for item in video_ids):
+            raise ValueError("A saved summary list membership is malformed.")
+        if len(video_ids) != len(set(video_ids)):
+            raise ValueError("A saved summary list has duplicate videos.")
     for source_key, source in value["sources"].items():
         if not isinstance(source_key, str) or not isinstance(source, dict):
             raise ValueError("A saved source is malformed.")
@@ -72,7 +130,7 @@ class JsonStore:
                 value = json.loads(self.file_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError) as error:
                 raise ValueError("The archive could not be read; the original was kept.") from error
-            return validate_archive(value)
+            return validate_archive(upgrade_archive(value))
 
     def update(self, change: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
         """Apply one change and replace the JSON file atomically."""

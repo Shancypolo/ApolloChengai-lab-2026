@@ -37,12 +37,14 @@ def visual_source(kind: str, source_id: str) -> dict:
         }
         for video_id, title, published_at, author in rows
     ]
+    if kind == "video":
+        videos = [video for video in videos if video["id"] == source_id]
     return {
         "source_key": f"{kind}:{source_id}",
         "kind": kind,
         "id": source_id,
-        "title": "Lectures on evidence and uncertainty",
-        "url": "https://www.youtube.com/playlist?list=PLVANSOs5ny50",
+        "title": "Lectures on evidence and uncertainty" if kind == "playlist" else videos[0]["title"],
+        "url": "https://www.youtube.com/playlist?list=PLVANSOs5ny50" if kind == "playlist" else videos[0]["url"],
         "videos": videos,
         "omitted_video_entries": 0,
     }
@@ -246,6 +248,25 @@ def main() -> None:
             page.screenshot(path=str(screenshots_directory / "archive-detail-ultrawide.png"), full_page=True)
             assert_no_horizontal_overflow(page, 3440, 1100)
             page.set_viewport_size({"width": 320, "height": 940})
+            page.locator('.site-nav a[href="/archive"]').click()
+            page.locator('.create-list-form input[name="title"]').fill("Reading desk")
+            page.locator('.create-list-form button').click()
+            custom_list_id = page.url.rsplit("/", 1)[-1]
+            page.get_by_text("Reading desk").wait_for()
+            page.locator('.site-nav a[href="/"]').click()
+            page.locator('#target-list').select_option(custom_list_id)
+            page.locator('#source-url').fill("https://www.youtube.com/watch?v=aBcdEF_1234")
+            page.locator('.search-form button').click()
+            page.locator('.video-row').first.wait_for(timeout=15_000)
+            page.locator('.site-nav a[href="/archive"]').click()
+            page.locator('.archive-row').filter(has_text="Reading desk").click()
+            page.locator('.summary-title').filter(has_text="A long view of research and careful uncertainty").wait_for()
+            assert page.locator('.archive-summary').count() == 1
+            page.screenshot(path=str(screenshots_directory / "custom-list-mobile.png"), full_page=True)
+            assert_no_horizontal_overflow(page, 320, 940)
+            page.locator('.delete-list-form input[name="confirm"]').check()
+            page.locator('.delete-list-form button').click()
+            page.get_by_text("Reading desk").wait_for(state="detached")
 
             def offline_topic_function(titles: list[str], usage_callback=None) -> list[str]:
                 """Simulate an API connection failure without using the network."""
