@@ -1,0 +1,6 @@
+{% if error_notice_message %}
+<section class="failure-notice">
+  <p>{{ error_notice_message }}</p>
+  <a href="{{ dismiss_url or url_for('home') }}">Continue →</a>
+</section>
+{% endif %}

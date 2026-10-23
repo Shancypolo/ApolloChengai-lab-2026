@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}PageOne{% endblock %}</title>
+  {% block refresh %}{% endblock %}
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pageone.css') }}">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="site-header">
+      <nav class="site-nav">
+        <a href="{{ url_for('home') }}" class="nav-link {% if request.endpoint == 'home' %}is-current{% endif %}">Home</a>
+        <a href="{{ url_for('archive_index') }}" class="nav-link {% if request.endpoint in ['archive_index', 'archive_detail'] %}is-current{% endif %}">Archive</a>
+        <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint == 'settings' %}is-current{% endif %}">Settings</a>
+      </nav>
+      <a class="site-mark" href="{{ url_for('home') }}">P. 1</a>
+    </header>
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <aside class="usage-meter" title="Cached tokens are included in input; thinking tokens are included in output. Cost uses reported usage and current model token rates.">
+    <span>Session tokens: {{ "{:,}".format(usage.total_tokens) }} total · {{ "{:,}".format(usage.input_tokens) }} input ({{ "{:,}".format(usage.cached_tokens) }} cached) · {{ "{:,}".format(usage.output_tokens) }} output ({{ "{:,}".format(usage.reasoning_tokens) }} thinking)</span>
+    <strong>{{ usage.api_calls }} AI calls · Known cost: {{ usage.cost_usd }} USD{% if usage.is_partial %} · Partial usage: {{ usage.unreported_calls }} unreported, {{ usage.unpriced_calls }} unpriced, {{ usage.incomplete_details_calls }} incomplete details{% endif %}</strong>
+  </aside>
+</body>
+</html>

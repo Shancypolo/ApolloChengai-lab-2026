@@ -7,36 +7,29 @@ Some features below probably wont make it to the final product.
 5. support multiple playlists
 6. automatic fetch new videos added to playlist and summarize on startup
 
-create a web app using python, Flask + Jinja2 + HTMX + css. api is in env var OPENAI_API_KEY
-goal: summarize youtube playlists and youtube videos. features include list all video titles from the playlist. sort or group videos by publish date, author, and topic
-2. optionally extend chats for more information about a video
-3. customizable summary preferences
-4. store past video summary of playlist
+## PageOne
 
-visuals: a collapsable sidebar with pages settings, archive, and home.
-    Home: interface like google search engine. center bar prompts for playlist link or video link. after press enter or press summarize jumps to interface that shows loading/generating.  after finish load show a multiple choice list of all videos' titles in that playlist. click on something and it opens that video's link. app saves and reads list of video ids and playlist ids on local txt/csv/json file. user choose all or none or some videos to batch summarize. show loading, then show collapsed list of summaries where users can easily find summary of a video out of hundreds.
-settings: ai summmary preferences
-archive: easily accessable past playlists, videos, and summaries. 
+- Local Python Flask app with Jinja2 pages and external CSS; the interface has no JavaScript.
+- A horizontal Home, Archive, and Settings navigation; a fixed session token and USD-cost meter sits at the bottom left.
+- A text-only `P. 1` masthead, single white surface, generous open space, and horizontal editorial rules; Home, Archive, and Settings keep visible copy minimal.
+- Viewport-scaled masthead and search, wide archive and result lists, and readable notes on narrow screens.
+- Script-free inline failure notices with rotating log and terminal diagnostics; `run.py` also shows a local notice when required packages are missing.
+- Archive index search matches source and video titles in Python.
+- HTTPS YouTube video and playlist links are checked against an explicit host and ID allowlist.
+- Playlist titles load before summaries. GPT-6 Luna assigns topic labels from title strings only; uninformative titles receive `Other`.
+- Users can sort immediately by playlist order, title, publish date, author, or topic, filter the title list, and select all, none, or individual videos using large selection circles.
+- Selected videos are summarized in a background batch; saved summaries are reused by video ID unless the user requests a refresh.
+- Collapsed summaries in batch results and archive detail can be searched by title, topic, or summary text without JavaScript.
+- Summary and follow-up prompts use English. Follow-ups show loading progress, fetch captions, and store only the question and answer.
+- Local JSON archive stores source rows, title topics, summaries, chat turns, timestamps, and summary preferences. Archive and Settings show the archive and error-log file paths.
+- Multiple playlists can be saved side by side; automatic startup refresh of newly added playlist videos remains deferred.
+- Session token counts and estimated model cost stay in process memory and are discarded after the browser session or ledger expiry.
+- Rotating diagnostic logs omit transcript text, prompts, model output, and credentials.
 
-code must maximize readability for absolute beginner coders. use object oriented and functional programming paradigms. prefer functional programming over object oriented but you may use both. write a vs code readable comment under each function and class that explains usage and method with minimal words. write atleast 2 python files. locate html files outside of python files instead of embedding it. maximize flexibility on windows and mac newest version. use browser, computer control, cloud browser and subagents to visually test on extreme aspect ratios for correct display and correct functionality.## 5. Engineering constraints
-- Use functional programming for transformations, validation, normalization, and rendering.
-- Use object-oriented programming only through small concrete objects that own real state. Do not add abstract base classes, factories, inheritance trees, generic framework layers, or templates.
-- Keep control nesting at four levels or fewer.
-- Use straightforward native Python, descriptive names, focused functions, and a clear constants section.
-- Preserve user-owned files and unrelated edits. Do not use destructive resets or broad deletion.
-- Read the handoff and repository documentation carefully before making related changes.
-- Keep README short and practical. Keep HANDOFF detailed and technically precise.
-- Update all relevant documentation whenever behavior, prompts, context, tools, domains, tests, dependencies, or output contracts change.
-- Research industry standards before writing or materially revising a handoff. Record the sources used and distinguish documented facts from assumptions.
-- Handoff must cover setup, files, runtime flow, AI contracts, minimal context, source policy, security boundary, privacy, failure handling, test evidence, ownership, maintenance, and acceptance criteria.
-- Use the handoff's prior checks and tests as the starting regression suite.
-- Run compile checks, offline fake-client tests, relevant live diagnostics, and an end-to-end CLI smoke test when authorized.
-- Debug failures until the main program, public functions, and relevant edge cases work.
-- Keep offline tests network-free. Keep live API diagnostics separate and clearly identified because they consume quota.
-- Cover dynamic questions, preference persistence, no-repeat behavior, early search, ambiguous-input progression, tool configuration, source allowlisting, HTTPS validation, malformed responses, injection handling, blank input, EOF, Unicode, missing credentials, output contract, and nesting depth.
-- Report failures and fixes precisely. Do not claim a check passed unless it ran successfully.
-- outsource as much functions to ai as possible
-- search online 
-- follow online industry guides to anti ai jailbraking and high quality prompts.
-- folow industry guides to uncertain topics.
-- design code tests and easily debuggable error reporting in a log file.
+## Limits
+
+- English captions are required. Caption retrieval or YouTube extraction may fail due to availability or service changes.
+- `yt-dlp` listing is not the official YouTube Data API; review the technical handoff for source and terms considerations.
+- Date and author metadata may be `Unknown`.
+- Cost uses the documented GPT-6 Luna token rates and reports partial values when usage detail is unavailable.
+- No added accessibility or localization layer is included, by request.

@@ -14,5 +14,5 @@ with tempfile.TemporaryDirectory() as folder:
     data = json.loads(file.read_text(encoding="utf-8"))
     transcript = " ".join(s["utf8"].strip() for e in data["events"] for s in e.get("segs", []) if s.get("utf8", "").strip())
 
-response = OpenAI().responses.create(model="gpt-5.6-luna", reasoning={"effort": "high"}, tools=[], instructions="Write a concise academic summary in coherent paragraphs. Explain the central thesis, key arguments, evidence, and limitations. Do not invent facts.", input=transcript)
+response = OpenAI().responses.create(model="gpt-6-luna", reasoning={"effort": "high"}, tools=[], instructions="Write a concise academic summary in coherent paragraphs. Explain the central thesis, key arguments, evidence, and limitations. Do not invent facts.", input=transcript)
 print(response.output_text)

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Archive — PageOne{% endblock %}
+{% block content %}
+<section class="page-heading editorial-heading"><h1>Archive</h1></section>
+<form class="archive-search" method="get" action="{{ url_for('archive_index') }}">
+  <input id="archive-search" type="search" name="q" value="{{ query }}" maxlength="200" placeholder="Search archive">
+  <button type="submit" title="Search archive">⌕</button>
+</form>
+<p class="file-caption">Archive file: {{ archive_file }}</p>
+{% if not sources %}<div class="empty-state"><h2>Nothing saved yet</h2></div>
+{% else %}
+<section class="archive-list">
+  {% for source in sources %}
+  <a class="archive-row" href="{{ url_for('archive_detail', source_key=source.source_key) }}"><span class="archive-item"><strong>{{ source.title }}</strong></span><span class="archive-arrow"></span></a>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

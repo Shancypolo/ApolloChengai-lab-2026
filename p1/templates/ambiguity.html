@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Choose a source — PageOne{% endblock %}
+{% block content %}
+<section class="result-panel notice-panel">
+  <p class="kicker">ONE LINK, TWO POSSIBILITIES</p>
+  <h1>What would you like to read?</h1>
+  <p>This link contains both a video and a playlist.</p>
+  {% for kind, label in [('playlist', 'The playlist'), ('video', 'This video')] %}
+  <form class="choice-form" method="post" action="{{ url_for('inspect_source') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="source_url" value="{{ source_url }}"><input type="hidden" name="source_kind" value="{{ kind }}">
+    <button class="button button-outline" type="submit">{{ label }} ></button>
+  </form>
+  {% endfor %}
+</section>
+{% endblock %}

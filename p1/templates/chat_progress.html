@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Answering — PageOne{% endblock %}
+{% block refresh %}<meta http-equiv="refresh" content="2;url={{ url_for('job_progress', job_id=job.id) }}">{% endblock %}
+{% block content %}
+<section class="progress-page">
+  <p class="kicker">FOLLOW-UP</p>
+  <h1>{{ job.message if job.message != "Waiting to start." else "Answering your question." }}</h1>
+  <p class="muted">Your answer will appear here when ready.</p>
+</section>
+{% endblock %}

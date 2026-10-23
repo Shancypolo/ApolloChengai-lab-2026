@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Reading YouTube list — PageOne{% endblock %}
+{% block refresh %}<meta http-equiv="refresh" content="2;url={{ url_for('job_progress', job_id=job.id) }}">{% endblock %}
+{% block content %}
+<section class="progress-page">
+  <p class="kicker">READING VIDEO TITLES</p>
+  <h1>Loading the playlist and assigning title topics.</h1>
+
+</section>
+{% endblock %}
