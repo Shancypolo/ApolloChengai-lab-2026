@@ -18,9 +18,13 @@ DEFAULT_SETTINGS = {
     "default_playlist_sort": "original",
     "archive_sort": "recent",
     "auto_summarize_new": True,
+    "interface_scale": "standard",
+    "reading_width": "wide",
 }
 PLAYLIST_SORT_OPTIONS = {"original", "published_at", "author", "topic", "title"}
 ARCHIVE_SORT_OPTIONS = {"recent", "title"}
+INTERFACE_SCALE_OPTIONS = {"compact", "standard", "large", "extra_large"}
+READING_WIDTH_OPTIONS = {"wide", "focused"}
 
 
 def empty_archive() -> dict[str, Any]:
@@ -36,8 +40,15 @@ def empty_archive() -> dict[str, Any]:
 
 
 def upgrade_archive(value: Any) -> Any:
-    """Read old archive files as version 2 without changing their disk bytes."""
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
+    """Supply new settings without changing an older file on disk."""
+    if not isinstance(value, dict):
+        return value
+    if value.get("schema_version") == 2:
+        saved_settings = value.get("settings")
+        if not isinstance(saved_settings, dict):
+            return value
+        return {**value, "settings": {**DEFAULT_SETTINGS, **saved_settings}}
+    if value.get("schema_version") != 1:
         return value
     upgraded = {**value, "schema_version": 2, "settings": dict(DEFAULT_SETTINGS), "summary_lists": {}}
     for source_key, source in value.get("sources", {}).items():
@@ -79,6 +90,10 @@ def validate_archive(value: Any) -> dict[str, Any]:
         raise ValueError("The saved archive sort is malformed.")
     if type(settings.get("auto_summarize_new")) is not bool:
         raise ValueError("The saved automatic summary setting is malformed.")
+    if settings.get("interface_scale") not in INTERFACE_SCALE_OPTIONS:
+        raise ValueError("The saved interface scale is malformed.")
+    if settings.get("reading_width") not in READING_WIDTH_OPTIONS:
+        raise ValueError("The saved reading width is malformed.")
     lists = value.get("summary_lists")
     if not isinstance(lists, dict):
         raise ValueError("The saved summary lists are malformed.")
@@ -113,8 +128,8 @@ def validate_archive(value: Any) -> dict[str, Any]:
     return value
 
 
-class JsonStore:
-    """Own one JSON file and serialize local reads and atomic updates."""
+class ArchiveStore:
+    """Own the archive JSON file and serialize reads and atomic updates."""
 
     def __init__(self, file_path: str | Path):
         """Remember the data path and create a lock for local updates."""

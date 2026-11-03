@@ -60,9 +60,12 @@ def assert_no_horizontal_overflow(page, width: int, height: int) -> None:
             raise AssertionError(f"Horizontal overflow at {width}x{height}: {element.get_attribute('class')} {bounds}.")
 
 
-def assert_no_embedded_scripts_or_aria(page) -> None:
-    """Confirm rendered pages include no scripts or explicit ARIA markup."""
-    assert page.locator("script").count() == 0
+def assert_visual_script_and_no_aria(page) -> None:
+    """Confirm only the reading-position helper loads and markup has no ARIA."""
+    scripts = page.locator("script")
+    assert scripts.count() == 1
+    assert scripts.first.get_attribute("src").endswith("/static/js/reading_position.js")
+    assert page.locator("script:not([src])").count() == 0
     page_markup = page.content()
     assert re.search(r"\saria-[a-z][\w-]*\s*=", page_markup, re.IGNORECASE) is None
     assert re.search(r"\srole\s*=", page_markup, re.IGNORECASE) is None
@@ -88,12 +91,16 @@ def main() -> None:
         """Classify fixture titles without receiving any transcript text."""
         return ["Evidence", "Research", "Other"][:len(titles)]
 
-    def summary_function(title: str, transcript: str, preferences: str, usage_callback=None) -> dict:
-        """Return stable summary prose without calling an AI provider."""
-        return {"summary": f"{title} presents a careful claim and supporting evidence."}
+    def batch_summary_function(videos: list[dict], preferences: str, usage_callback=None) -> dict:
+        """Return all fixture summaries without calling an AI provider."""
+        return {
+            video["video_id"]: {"summary": f"{video['video_title']} presents a careful claim and supporting evidence."}
+            for video in videos
+        }
 
     def chat_function(title: str, transcript: str, summary: str, question: str, history: list, usage_callback=None) -> str:
-        """Answer a fixture follow-up without calling a remote model."""
+        """Hold the fixture answer briefly so loading visuals can be inspected."""
+        threading.Event().wait(1.5)
         return "The example presents the conclusion as tentative."
 
     temporary_directory = tempfile.TemporaryDirectory(prefix="pageone-visual-")
@@ -102,7 +109,7 @@ def main() -> None:
         source_fetcher=visual_source,
         transcript_fetcher=transcript_fetcher,
         topic_function=topic_function,
-        summary_function=summary_function,
+        batch_summary_function=batch_summary_function,
         chat_function=chat_function,
     )
     server = make_server("127.0.0.1", 0, app, threaded=True)
@@ -126,7 +133,7 @@ def main() -> None:
             page.goto(base_url, wait_until="networkidle")
             assert page.url == base_url + "/"
             assert page.title() == "PageOne"
-            assert_no_embedded_scripts_or_aria(page)
+            assert_visual_script_and_no_aria(page)
             assert_single_surface(page)
             page.screenshot(path=str(screenshots_directory / "home-wide.png"), full_page=True)
             page.locator("#source-url").fill("https://example.com/watch?v=GmBG-26_Izw")
@@ -153,7 +160,7 @@ def main() -> None:
             page.locator(".video-row").first.wait_for(timeout=15_000)
             page.locator("h2").filter(has_text="Lectures on evidence and uncertainty").wait_for()
             assert page.locator(".video-row").count() == 3
-            assert_no_embedded_scripts_or_aria(page)
+            assert_visual_script_and_no_aria(page)
             assert_single_surface(page)
             page.screenshot(path=str(screenshots_directory / "results-wide.png"), full_page=True)
             for width, height in ((280, 940), (320, 940), (430, 1100), (844, 390), (1365, 768), (1600, 1000), (3440, 1100)):
@@ -179,9 +186,23 @@ def main() -> None:
             assert page.locator('input[name="video_ids"]:checked').count() == 3
             page.locator("button[name=list_action][value=summarize]").click()
             page.get_by_text("BATCH COMPLETE", exact=True).wait_for(timeout=15_000)
-            page.locator(".summary-prose").first.wait_for()
+            page.locator(".summary-prose").first.wait_for(state="attached")
             assert page.locator(".summary-card").count() == 3
+            assert page.locator(".summary-card[open]").count() == 0
+            assert_visual_script_and_no_aria(page)
+
+            # Open a low card after scrolling it into view and ensure its heading
+            # stays at the same viewport position while the details expand.
+            stable_heading = page.locator(".summary-card").nth(2).locator("summary")
+            stable_heading.scroll_into_view_if_needed()
+            before_top = stable_heading.bounding_box()["y"]
+            stable_heading.click()
+            page.wait_for_timeout(80)
+            after_top = stable_heading.bounding_box()["y"]
+            assert abs(after_top - before_top) <= 2, (before_top, after_top)
             assert page.locator(".summary-card[open]").count() == 1
+            stable_heading.click()
+            assert page.locator(".summary-card[open]").count() == 0
 
             page.locator("#summary-filter").fill("Video 3")
             page.locator(".summary-filter button").click()
@@ -194,13 +215,21 @@ def main() -> None:
             page.locator(".summary-filter a").click()
             assert page.locator(".summary-card").count() == 3
 
+            # Test the progress page's active CSS animation while a fake answer
+            # is held in the background, then release it by waiting for completion.
+            page.locator(".summary-card").first.locator("summary").click()
             page.locator('.chat-form input[name="question"]').first.fill("How certain is that conclusion?")
             page.locator(".chat-form button[type=submit]").first.click()
             page.get_by_text("Answering your question.").wait_for(timeout=5_000)
+            assert page.locator('meta[http-equiv="refresh"]').count() == 1
+            animation_name = page.locator(".progress-page").evaluate("el => getComputedStyle(el, '::after').animationName")
+            animation_duration = page.locator(".progress-page").evaluate("el => getComputedStyle(el, '::after').animationDuration")
+            assert animation_name == "reading-line"
+            assert animation_duration == "1.8s"
             page.screenshot(path=str(screenshots_directory / "chat-loading.png"), full_page=True)
             page.get_by_text("The example presents the conclusion as tentative.").wait_for(timeout=10_000)
             assert page.locator(".chat-turn").count() == 1
-            assert_no_embedded_scripts_or_aria(page)
+            assert_visual_script_and_no_aria(page)
 
             page.set_viewport_size({"width": 320, "height": 940})
             assert page.locator(".sidebar").count() == 0
@@ -220,6 +249,7 @@ def main() -> None:
             page.locator("#archive-search").fill("")
             page.locator(".archive-search button").click()
             page.locator(".archive-row").first.click()
+            page.locator(".archive-summary").first.locator("summary").click()
             page.locator(".summary-prose").first.wait_for()
             page.get_by_text("How certain is that conclusion?").wait_for()
             page.locator("#archive-filter").fill("Video 3")
@@ -232,6 +262,17 @@ def main() -> None:
             page.locator('.site-nav a[href="/settings"]').click()
             page.locator("h1").filter(has_text="Settings").wait_for()
             assert "pageone.log" in page.locator(".file-caption").inner_text()
+            initial_font_size = float(page.locator("body").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
+            page.locator('select[name="interface_scale"]').select_option("extra_large")
+            page.locator("button[type=submit]").click()
+            page.locator("body.scale-extra_large").wait_for()
+            large_font_size = float(page.locator("body").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
+            assert large_font_size > initial_font_size
+            page.locator('select[name="interface_scale"]').select_option("compact")
+            page.locator("button[type=submit]").click()
+            page.locator("body.scale-compact").wait_for()
+            compact_font_size = float(page.locator("body").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
+            assert compact_font_size < initial_font_size
             page.locator("#summary-preferences").fill("Keep uncertainty visible.")
             page.locator("button[type=submit]").click()
             page.locator('.settings-feedback[title="Summary preferences saved."]').wait_for()

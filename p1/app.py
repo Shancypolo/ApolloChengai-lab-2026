@@ -18,8 +18,14 @@ from urllib.parse import urlsplit
 from flask import Flask, abort, g, redirect, render_template, request, session, url_for
 from werkzeug.exceptions import HTTPException
 
-from storage import DEFAULT_PREFERENCES, JsonStore
-from summary_service import SummaryError, answer_video_question, label_video_titles, summarize_video
+from archive_storage import (
+    ArchiveStore, DEFAULT_PREFERENCES, DEFAULT_SETTINGS,
+    INTERFACE_SCALE_OPTIONS, READING_WIDTH_OPTIONS,
+)
+from ai_summaries import (
+    SummaryError, answer_video_question, label_video_titles,
+    split_summary_batches, summarize_video_batch,
+)
 from usage_accounting import SessionUsageLedger
 from youtube_source import (
     SourceError,
@@ -172,7 +178,7 @@ def attach_summary_to_source(source: dict[str, Any], video_id: str, summary: dic
 
 
 def update_saved_summary(
-    store: JsonStore,
+    store: ArchiveStore,
     source_key: str,
     video_id: str,
     title: str,
@@ -304,7 +310,7 @@ def apply_title_topics(source: dict[str, Any], labels: list[str]) -> dict[str, A
     return copied
 
 
-def save_inspected_source(store: JsonStore, source: dict[str, Any], create_playlist_list: bool = True) -> None:
+def save_inspected_source(store: ArchiveStore, source: dict[str, Any], create_playlist_list: bool = True) -> None:
     """Save metadata and reconcile a playlist's editable list membership."""
     def change(archive: dict[str, Any]) -> None:
         """Keep deliberate list moves while adding newly found playlist videos."""
@@ -332,7 +338,7 @@ def save_inspected_source(store: JsonStore, source: dict[str, Any], create_playl
     store.update(change)
 
 
-def add_video_to_list(store: JsonStore, list_id: str, video_id: str) -> None:
+def add_video_to_list(store: ArchiveStore, list_id: str, video_id: str) -> None:
     """Add one video to an existing summary list exactly once."""
     def change(archive: dict[str, Any]) -> None:
         """Append a membership and update its displayed date."""
@@ -411,9 +417,25 @@ def archive_groups(archive: dict[str, Any], query: str) -> dict[str, list[dict[s
     return groups
 
 
+def settings_error_message(
+    preferences: str, playlist_sort: str, archive_sort: str,
+    interface_scale: str, reading_width: str,
+) -> str:
+    """Return a short notice for invalid preference and display choices."""
+    if not preferences:
+        return "Preferences cannot be blank."
+    if len(preferences) > MAX_PREFERENCE_LENGTH:
+        return f"Keep preferences under {MAX_PREFERENCE_LENGTH} characters."
+    if playlist_sort not in VIDEO_SORT_OPTIONS or archive_sort not in {"recent", "title"}:
+        return "Choose a valid sort option."
+    if interface_scale not in INTERFACE_SCALE_OPTIONS or reading_width not in READING_WIDTH_OPTIONS:
+        return "Choose a valid display size."
+    return ""
+
+
 def save_general_settings(
-    store: JsonStore, preferences: str, playlist_sort: str, archive_sort: str,
-    auto_summarize_new: bool | None,
+    store: ArchiveStore, preferences: str, playlist_sort: str, archive_sort: str,
+    auto_summarize_new: bool | None, interface_scale: str, reading_width: str,
 ) -> None:
     """Persist validated summary and general preferences together."""
     def change(archive: dict[str, Any]) -> None:
@@ -421,12 +443,14 @@ def save_general_settings(
         archive["summary_preferences"] = preferences
         archive["settings"]["default_playlist_sort"] = playlist_sort
         archive["settings"]["archive_sort"] = archive_sort
+        archive["settings"]["interface_scale"] = interface_scale
+        archive["settings"]["reading_width"] = reading_width
         if auto_summarize_new is not None:
             archive["settings"]["auto_summarize_new"] = auto_summarize_new
     store.update(change)
 
 
-def link_existing_summary(store: JsonStore, source_key: str, video_id: str) -> None:
+def link_existing_summary(store: ArchiveStore, source_key: str, video_id: str) -> None:
     """Attach an existing video summary to another archived playlist."""
     def change(archive: dict[str, Any]) -> None:
         """Add the source reference and restore the topic label."""
@@ -445,6 +469,35 @@ def link_existing_summary(store: JsonStore, source_key: str, video_id: str) -> N
     store.update(change)
 
 
+def save_batch_results(
+    app: Flask,
+    job_id: str,
+    source_key: str,
+    batch: list[dict[str, str]],
+    results: dict[str, dict[str, str]],
+    succeeded: int,
+    failed: list[dict[str, str]],
+) -> int:
+    """Save each returned summary and report individual storage failures."""
+    registry: JobRegistry = app.config["JOBS"]
+    store: ArchiveStore = app.config["STORE"]
+    for video in batch:
+        try:
+            update_saved_summary(
+                store, source_key, video["video_id"],
+                video["video_title"], results[video["video_id"]],
+            )
+            succeeded += 1
+        except Exception as error:
+            failed.append({
+                "video_id": video["video_id"], "title": video["video_title"],
+                "message": failure_notice(error),
+            })
+            safe_log(app, f"Video {video['video_id']} save failed", error)
+        registry.update(job_id, finished=succeeded + len(failed), succeeded=succeeded, failed=list(failed))
+    return succeeded
+
+
 def run_summary_job(
     app: Flask,
     job_id: str,
@@ -453,49 +506,59 @@ def run_summary_job(
     refresh: bool,
     session_id: str,
 ) -> None:
-    """Summarize selected videos sequentially and update batch progress."""
+    """Fetch captions, then summarize bounded groups without parallel calls."""
     registry: JobRegistry = app.config["JOBS"]
-    store: JsonStore = app.config["STORE"]
+    store: ArchiveStore = app.config["STORE"]
     registry.update(job_id, status="running", message="Fetching captions and writing summaries.")
     try:
         archive = store.read()
         preferences = archive["summary_preferences"]
         failed: list[dict[str, str]] = []
         succeeded = 0
+        pending: list[dict[str, str]] = []
         for index, video_id in enumerate(video_ids, start=1):
-            registry.update(job_id, finished=index - 1, message=f"Working on video {index} of {len(video_ids)}.")
+            registry.update(job_id, message=f"Reading captions {index} of {len(video_ids)}.")
             existing = store.read()["summaries"].get(video_id)
             if existing and not refresh:
                 link_existing_summary(store, source["source_key"], video_id)
                 succeeded += 1
+                registry.update(job_id, finished=succeeded + len(failed), succeeded=succeeded)
                 continue
             try:
                 transcript = app.config["TRANSCRIPT_FETCHER"](video_id)
-                result = app.config["SUMMARY_FUNCTION"](
-                    clean_video_title(source, video_id),
-                    transcript,
-                    preferences,
-                    usage_callback=lambda usage: app.config["USAGE"].record(session_id, usage),
-                )
-                update_saved_summary(
-                    store,
-                    source["source_key"],
-                    video_id,
-                    clean_video_title(source, video_id),
-                    result,
-                )
-                succeeded += 1
-            except (SourceError, SummaryError) as error:
-                failed.append({"video_id": video_id, "title": clean_video_title(source, video_id), "message": failure_notice(error)})
-                safe_log(app, f"Video {video_id} could not be summarized", error)
+                pending.append({
+                    "video_id": video_id,
+                    "video_title": clean_video_title(source, video_id),
+                    "transcript": transcript,
+                })
             except Exception as error:
                 failed.append({
                     "video_id": video_id,
                     "title": clean_video_title(source, video_id),
                     "message": failure_notice(error),
                 })
-                safe_log(app, f"Video {video_id} request failed", error)
-            registry.update(job_id, finished=index, succeeded=succeeded, failed=list(failed))
+                safe_log(app, f"Video {video_id} captions failed", error)
+                registry.update(job_id, finished=succeeded + len(failed), failed=list(failed))
+        batches = split_summary_batches(pending)
+        for batch_number, batch in enumerate(batches, start=1):
+            registry.update(job_id, message=f"Writing summaries {batch_number} of {len(batches)}.")
+            try:
+                results = app.config["BATCH_SUMMARY_FUNCTION"](
+                    batch, preferences,
+                    usage_callback=lambda usage: app.config["USAGE"].record(session_id, usage),
+                )
+            except Exception as error:
+                safe_log(app, f"Summary request {batch_number} failed", error)
+                for video in batch:
+                    failed.append({
+                        "video_id": video["video_id"], "title": video["video_title"],
+                        "message": failure_notice(error),
+                    })
+                registry.update(job_id, finished=succeeded + len(failed), failed=list(failed))
+                continue
+            succeeded = save_batch_results(
+                app, job_id, source["source_key"], batch, results, succeeded, failed,
+            )
         final_status = "complete" if not failed else "partial"
         registry.update(
             job_id,
@@ -526,7 +589,7 @@ def run_source_inspection_job(
 ) -> None:
     """Fetch titles, update a list, and summarize new or approved videos."""
     registry: JobRegistry = app.config["JOBS"]
-    store: JsonStore = app.config["STORE"]
+    store: ArchiveStore = app.config["STORE"]
     registry.update(job_id, status="running", message="Fetching video titles.")
     try:
         source = app.config["SOURCE_FETCHER"](kind, source_id)
@@ -592,7 +655,7 @@ def run_source_inspection_job(
 def run_chat_job(app: Flask, job_id: str, video_id: str, question: str, session_id: str) -> None:
     """Answer one saved video's question and report progress to its page."""
     registry: JobRegistry = app.config["JOBS"]
-    store: JsonStore = app.config["STORE"]
+    store: ArchiveStore = app.config["STORE"]
     registry.update(job_id, status="running", message="Reading captions for your question.")
     try:
         saved = store.read()["summaries"][video_id]
@@ -617,7 +680,7 @@ def run_chat_job(app: Flask, job_id: str, video_id: str, question: str, session_
         source_key = matching_lists[-1] if matching_lists else f"video:{video_id}"
         registry.update(
             job_id, status="complete", question=question, answer=answer,
-            source_key=source_key, message="Answer ready.",
+            source_key=source_key, video_id=video_id, message="Answer ready.",
         )
     except Exception as error:
         safe_log(app, f"Video {video_id} follow-up failed", error)
@@ -629,7 +692,7 @@ def create_app(
     source_fetcher: Callable[[str, str], dict[str, Any]] = fetch_source,
     transcript_fetcher: Callable[[str], str] = fetch_english_transcript,
     topic_function: Callable[..., list[str]] = label_video_titles,
-    summary_function: Callable[..., dict[str, Any]] = summarize_video,
+    batch_summary_function: Callable[..., dict[str, dict[str, str]]] = summarize_video_batch,
     chat_function: Callable[..., str] = answer_video_question,
 ) -> Flask:
     """Build a testable local app with replaceable YouTube and AI services."""
@@ -637,13 +700,13 @@ def create_app(
     app.config.update(
         SECRET_KEY=secrets.token_hex(32),
         DATA_DIRECTORY=Path(data_directory or DEFAULT_DATA_DIRECTORY),
-        STORE=JsonStore(Path(data_directory or DEFAULT_DATA_DIRECTORY) / "pageone.json"),
+        STORE=ArchiveStore(Path(data_directory or DEFAULT_DATA_DIRECTORY) / "pageone.json"),
         JOBS=JobRegistry(),
         USAGE=SessionUsageLedger(),
         SOURCE_FETCHER=source_fetcher,
         TRANSCRIPT_FETCHER=transcript_fetcher,
         TOPIC_FUNCTION=topic_function,
-        SUMMARY_FUNCTION=summary_function,
+        BATCH_SUMMARY_FUNCTION=batch_summary_function,
         CHAT_FUNCTION=chat_function,
         MAX_CONTENT_LENGTH=1_000_000,
         SESSION_COOKIE_HTTPONLY=True,
@@ -684,9 +747,16 @@ def create_app(
 
     @app.context_processor
     def page_template_values() -> dict[str, Any]:
-        """Share form security and the current session's usage counter."""
+        """Share form security, usage, and saved visual scale on every page."""
         usage = app.config["USAGE"].snapshot(getattr(g, "usage_session_id", "missing"))
-        return {"csrf_token": getattr(g, "csrf_token", ""), "app_name": APP_NAME, "usage": usage}
+        try:
+            display_settings = app.config["STORE"].read()["settings"]
+        except ValueError:
+            display_settings = DEFAULT_SETTINGS
+        return {
+            "csrf_token": getattr(g, "csrf_token", ""), "app_name": APP_NAME,
+            "usage": usage, "display_settings": display_settings,
+        }
 
     @app.errorhandler(ValueError)
     def unreadable_local_data(error: ValueError):
@@ -741,7 +811,7 @@ def create_app(
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'none'; "
+            "default-src 'self'; script-src 'self'; "
             "style-src 'self'; img-src 'self' data:; connect-src 'self'; "
             "base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         )
@@ -853,7 +923,10 @@ def create_app(
             if job["status"] not in {"complete", "error"}:
                 return render_template("chat_progress.html", job=job)
             if job["status"] == "complete" and job.get("source_key"):
-                return redirect(url_for("archive_detail", source_key=job["source_key"]))
+                return redirect(url_for(
+                    "archive_detail", source_key=job["source_key"],
+                    open_video=job["video_id"], _anchor=f"video-{job['video_id']}",
+                ))
             message = job.get("answer") if job["status"] == "complete" else job["message"]
             return render_template(
                 "chat_answer.html", question=job.get("question", ""), answer=message,
@@ -921,6 +994,7 @@ def create_app(
         if not source:
             abort(404)
         filter_text = request.args.get("filter_text", "")[:MAX_FILTER_LENGTH]
+        open_video = request.args.get("open_video", "")
         videos = filter_summary_videos(source.get("videos", []), archive["summaries"], filter_text)
         return render_template(
             "archive_detail.html",
@@ -928,6 +1002,7 @@ def create_app(
             summaries=archive["summaries"],
             videos=videos,
             filter_text=filter_text,
+            open_video=open_video,
             targets=sorted(
                 [item for item in archive["summary_lists"].values() if item["id"] != source_key],
                 key=lambda item: item["title"].casefold(),
@@ -1041,7 +1116,7 @@ def create_app(
     @app.route("/settings", methods=["GET", "POST"])
     def settings():
         """Display and persist the user's reusable summary preferences."""
-        store: JsonStore = app.config["STORE"]
+        store: ArchiveStore = app.config["STORE"]
         message = ""
         tone = "success"
         if request.method == "POST":
@@ -1049,15 +1124,19 @@ def create_app(
             current_settings = store.read()["settings"]
             playlist_sort = request.form.get("default_playlist_sort", current_settings["default_playlist_sort"])
             archive_sort = request.form.get("archive_sort", current_settings["archive_sort"])
-            if not preferences:
-                message, tone = "Preferences cannot be blank.", "error"
-            elif len(preferences) > MAX_PREFERENCE_LENGTH:
-                message, tone = f"Keep preferences under {MAX_PREFERENCE_LENGTH} characters.", "error"
-            elif playlist_sort not in VIDEO_SORT_OPTIONS or archive_sort not in {"recent", "title"}:
-                message, tone = "Choose a valid sort option.", "error"
+            interface_scale = request.form.get("interface_scale", current_settings["interface_scale"])
+            reading_width = request.form.get("reading_width", current_settings["reading_width"])
+            message = settings_error_message(
+                preferences, playlist_sort, archive_sort, interface_scale, reading_width,
+            )
+            if message:
+                tone = "error"
             else:
                 auto_new = request.form.get("auto_summarize_new") == "yes" if request.form.get("settings_form") == "yes" else None
-                save_general_settings(store, preferences, playlist_sort, archive_sort, auto_new)
+                save_general_settings(
+                    store, preferences, playlist_sort, archive_sort, auto_new,
+                    interface_scale, reading_width,
+                )
                 message = "Summary preferences saved."
         archive = store.read()
         if tone == "error":

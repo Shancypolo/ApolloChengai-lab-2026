@@ -11,8 +11,11 @@ from pathlib import Path
 APP_DIRECTORY = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP_DIRECTORY))
 
-from summary_service import MODEL_NAME, REASONING_EFFORT, label_video_titles, summarize_video
-from usage_accounting import cost_units
+from ai_summaries import (
+    MODEL_NAME, REASONING_EFFORT, label_video_titles,
+    summarize_video, summarize_video_batch,
+)
+from usage_accounting import USD_UNITS_PER_DOLLAR, cost_units
 from youtube_source import SourceError, fetch_english_transcript, fetch_source
 
 
@@ -30,6 +33,7 @@ def main() -> int:
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--ai-only", action="store_true", help="Send one synthetic summary request without YouTube access.")
     modes.add_argument("--topics-only", action="store_true", help="Send synthetic titles only for one topic-label request.")
+    modes.add_argument("--batch-only", action="store_true", help="Summarize two synthetic videos in one request.")
     modes.add_argument("--source-only", action="store_true", help="List the sample playlist without captions or OpenAI calls.")
     arguments = parser.parse_args()
     try:
@@ -45,8 +49,22 @@ def main() -> int:
             recorded_usage = []
             topics = label_video_titles(titles, usage_callback=recorded_usage.append)
             usage = recorded_usage[0] if recorded_usage else None
-            cost = f"known_cost_usd={cost_units(usage) / 100_000_000:.8f}" if usage and usage.get("cached_detail_complete") else "known_cost_usd=unavailable"
+            cost = f"known_cost_usd={cost_units(usage) / USD_UNITS_PER_DOLLAR:.8f}" if usage and usage.get("cached_detail_complete") and usage.get("cache_write_detail_complete") else "known_cost_usd=unavailable"
             print(f"OpenAI topic check: success; model={MODEL_NAME}; reasoning={REASONING_EFFORT}; labels={len(topics)}; placeholder_is_other={topics[1] == 'Other'}; {cost}; tokens={usage['total_tokens'] if usage else 'unknown'}.")
+            return 0
+        if arguments.batch_only:
+            videos = [
+                {"video_id": "sample-one", "video_title": "Evidence and measurement", "transcript": SYNTHETIC_TRANSCRIPT},
+                {"video_id": "sample-two", "video_title": "Limits of inference", "transcript": "A researcher explains that a limited sample leaves important uncertainty."},
+            ]
+            recorded_usage = []
+            results = summarize_video_batch(videos, "Write a short academic summary.", usage_callback=recorded_usage.append)
+            usage = recorded_usage[0] if recorded_usage else None
+            cost = f"known_cost_usd={cost_units(usage) / USD_UNITS_PER_DOLLAR:.8f}" if usage and usage.get("cached_detail_complete") and usage.get("cache_write_detail_complete") else "known_cost_usd=unavailable"
+            print(
+                f"OpenAI batch check: success; model={MODEL_NAME}; reasoning={REASONING_EFFORT}; "
+                f"summaries={len(results)}; {cost}; tokens={usage['total_tokens'] if usage else 'unknown'}."
+            )
             return 0
         if arguments.ai_only:
             title = "Synthetic PageOne API contract check"
@@ -66,8 +84,8 @@ def main() -> int:
             usage_callback=recorded_usage.append,
         )
         usage = recorded_usage[0] if recorded_usage else None
-        if usage and usage.get("cached_detail_complete"):
-            cost = f"known_cost_usd={cost_units(usage) / 100_000_000:.8f}"
+        if usage and usage.get("cached_detail_complete") and usage.get("cache_write_detail_complete"):
+            cost = f"known_cost_usd={cost_units(usage) / USD_UNITS_PER_DOLLAR:.8f}"
         else:
             cost = "known_cost_usd=unavailable"
         print(
