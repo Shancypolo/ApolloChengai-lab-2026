@@ -8,6 +8,8 @@
   {% for kind, label in [('playlist', 'The playlist'), ('video', 'This video')] %}
   <form class="choice-form" method="post" action="{{ url_for('inspect_source') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="source_url" value="{{ source_url }}"><input type="hidden" name="source_kind" value="{{ kind }}">
+    {% if kind == 'video' %}<input type="hidden" name="target_list" value="{{ target_list }}">{% endif %}
+    <input type="hidden" name="replace_saved" value="{{ replace_saved }}">
     <button class="button button-outline" type="submit">{{ label }} ></button>
   </form>
   {% endfor %}

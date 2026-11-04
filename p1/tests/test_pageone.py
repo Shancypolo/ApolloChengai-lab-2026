@@ -19,9 +19,10 @@ APP_DIRECTORY = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP_DIRECTORY))
 
 from app import create_app, failure_notice, filter_summary_videos
-from storage import DEFAULT_PREFERENCES, JsonStore
-from summary_service import (
+from archive_storage import ArchiveStore, DEFAULT_PREFERENCES
+from ai_summaries import (
     CHAT_INSTRUCTIONS,
+    BATCH_SUMMARY_INSTRUCTIONS,
     MODEL_NAME,
     REASONING_EFFORT,
     SummaryError,
@@ -30,6 +31,8 @@ from summary_service import (
     decode_response,
     label_video_titles,
     summarize_video,
+    summarize_video_batch,
+    split_summary_batches,
     title_has_topic_clues,
 )
 from usage_accounting import SessionUsageLedger, cost_units, format_usd, usage_from_response
@@ -40,7 +43,7 @@ SAMPLE_USAGE = {
     "input_tokens": 1000,
     "output_tokens": 100,
     "total_tokens": 1100,
-    "input_tokens_details": {"cached_tokens": 200},
+    "input_tokens_details": {"cached_tokens": 200, "cache_write_tokens": 0},
     "output_tokens_details": {"reasoning_tokens": 30},
 }
 
@@ -67,7 +70,7 @@ def make_video_source(kind: str, source_id: str) -> dict:
         "source_key": f"{kind}:{source_id}",
         "kind": kind,
         "id": source_id,
-        "title": "A playlist of ideas" if kind == "playlist" else rows[0][1],
+        "title": "A playlist of ideas" if kind == "playlist" else rows[0]["title"],
         "url": "https://www.youtube.com/playlist?list=PLVANSOs5ny50",
         "videos": rows if kind == "playlist" else rows[:1],
         "omitted_video_entries": 0,
@@ -100,6 +103,43 @@ class FakeOpenAI:
 class PageOneCoreTests(unittest.TestCase):
     """Check URL validation, storage, model contracts, and usage parsing."""
 
+    def test_version_one_archive_upgrades_without_erasing_saved_bytes(self):
+        """Read old sources into editable lists and write version 2 later."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "pageone.json"
+            old = {
+                "schema_version": 1, "summary_preferences": "Keep evidence.",
+                "sources": {"playlist:PLVANSOs5ny50": make_video_source("playlist", "PLVANSOs5ny50")},
+                "summaries": {"GmBG-26_Izw": {
+                    "video_id": "GmBG-26_Izw", "title": "A careful study of evidence",
+                    "source_keys": ["playlist:PLVANSOs5ny50"], "summary": "Old summary.",
+                    "topics": ["Evidence"], "chat": [{"question": "Why?", "answer": "Evidence."}],
+                }},
+            }
+            path.write_text(json.dumps(old), encoding="utf-8")
+            store = ArchiveStore(path)
+            upgraded = store.read()
+            self.assertEqual(upgraded["schema_version"], 2)
+            self.assertEqual(upgraded["summary_preferences"], "Keep evidence.")
+            self.assertEqual(len(upgraded["summary_lists"]["playlist:PLVANSOs5ny50"]["video_ids"]), 3)
+            self.assertEqual(upgraded["summaries"]["GmBG-26_Izw"]["chat"][0]["answer"], "Evidence.")
+            self.assertIn('"schema_version": 1', path.read_text(encoding="utf-8"))
+            store.update(lambda archive: archive["settings"].__setitem__("archive_sort", "title"))
+            self.assertIn('"schema_version": 2', path.read_text(encoding="utf-8"))
+
+    def test_existing_archive_gets_new_display_defaults_on_read(self):
+        """Read older version-2 settings without rewriting saved bytes."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "pageone.json"
+            archive = ArchiveStore(path).read()
+            archive["settings"].pop("interface_scale")
+            archive["settings"].pop("reading_width")
+            path.write_text(json.dumps(archive), encoding="utf-8")
+            loaded = ArchiveStore(path).read()
+            self.assertEqual(loaded["settings"]["interface_scale"], "standard")
+            self.assertEqual(loaded["settings"]["reading_width"], "wide")
+            self.assertNotIn("interface_scale", path.read_text(encoding="utf-8"))
+
     def test_url_allowlist_and_ambiguous_video_playlist(self):
         """Accept YouTube HTTPS sources and retain both identifiers."""
         parsed = parse_youtube_url("https://www.youtube.com/watch?v=GmBG-26_Izw&list=PLVANSOs5ny50")
@@ -130,7 +170,7 @@ class PageOneCoreTests(unittest.TestCase):
         """Write Unicode preferences atomically and retain malformed bytes."""
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "pageone.json"
-            store = JsonStore(path)
+            store = ArchiveStore(path)
             self.assertEqual(store.read()["summary_preferences"], DEFAULT_PREFERENCES)
             store.update(lambda archive: archive.__setitem__("summary_preferences", "Cite café evidence."))
             self.assertEqual(store.read()["summary_preferences"], "Cite café evidence.")
@@ -256,6 +296,47 @@ class PageOneCoreTests(unittest.TestCase):
         self.assertEqual(len(topics), 81)
         self.assertEqual([len(json.loads(call["input"])["video_titles"]) for call in fake.responses.calls], [80, 1])
 
+    def test_video_batch_uses_one_grounded_request_and_checks_all_ids(self):
+        """Require every video to return once from one no-tool request."""
+        videos = [
+            {"video_id": "first", "video_title": "First study", "transcript": "First evidence."},
+            {"video_id": "second", "video_title": "Second study", "transcript": "Second evidence."},
+        ]
+        response_text = json.dumps({"summaries": [
+            {"video_id": "first", "summary": "First conclusion."},
+            {"video_id": "second", "summary": "Second conclusion."},
+        ]})
+        fake = FakeOpenAI(response_text)
+        recorded = []
+        result = summarize_video_batch(videos, "Keep uncertainty.", fake, recorded.append)
+        self.assertEqual(result["second"]["summary"], "Second conclusion.")
+        self.assertEqual(len(fake.responses.calls), 1)
+        call = fake.responses.calls[0]
+        self.assertEqual(json.loads(call["input"])["videos"], videos)
+        self.assertEqual(call["tools"], [])
+        self.assertFalse(call["store"])
+        self.assertIn("Keep each video's facts", BATCH_SUMMARY_INSTRUCTIONS)
+        self.assertEqual(len(recorded), 1)
+        with self.assertRaises(SummaryError):
+            summarize_video_batch(videos, "Keep uncertainty.", FakeOpenAI('{"summaries":[{"video_id":"first","summary":"Only one."}]}'))
+        with self.assertRaises(SummaryError):
+            summarize_video_batch(videos, "Keep uncertainty.", FakeOpenAI('{"summaries":[{"video_id":"first","summary":"One."},{"video_id":"first","summary":"Again."}]}'))
+        with self.assertRaises(SummaryError):
+            summarize_video_batch(videos, "Keep uncertainty.", FakeOpenAI('{"summaries":[{"video_id":"first","summary":"One.","extra":"ignored"},{"video_id":"second","summary":"Two."}]}'))
+
+    def test_video_batches_split_by_count_and_size_without_overlap(self):
+        """Keep large selections in sequential bounded groups."""
+        videos = [
+            {"video_id": str(index), "video_title": "Lecture", "transcript": "Evidence"}
+            for index in range(13)
+        ]
+        self.assertEqual([len(batch) for batch in split_summary_batches(videos)], [12, 1])
+        large = [
+            {"video_id": str(index), "video_title": "Lecture", "transcript": "x" * 110_000}
+            for index in range(2)
+        ]
+        self.assertEqual([len(batch) for batch in split_summary_batches(large)], [1, 1])
+
     def test_dynamic_video_question_uses_grounding_and_current_question(self):
         """Pass the active question and recent context to a no-tool call."""
         fake = FakeOpenAI('{"answer":"The speaker calls this tentative."}')
@@ -294,15 +375,33 @@ class PageOneCoreTests(unittest.TestCase):
         self.assertEqual(snapshot["total_tokens"], 1100)
         self.assertEqual(snapshot["reasoning_tokens"], 30)
         self.assertEqual(snapshot["cached_tokens"], 200)
-        self.assertEqual(format_usd(1), "$0.00000001")
+        self.assertEqual(format_usd(10), "$0.00000001")
         self.assertFalse(snapshot["is_partial"])
+
+    def test_prompt_cache_writes_use_reported_lifetime_rates(self):
+        """Price 30-minute and 12-hour cache writes without double counting."""
+        usage = {
+            "input_tokens": 100, "output_tokens": 20, "total_tokens": 120,
+            "input_tokens_details": {
+                "cached_tokens": 10, "cache_write_tokens": 40,
+                "cache_write_tokens_details": {"ttl_30m_tokens": 30, "ttl_12h_tokens": 10},
+            },
+            "output_tokens_details": {"reasoning_tokens": 5},
+        }
+        parsed = usage_from_response({"usage": usage})
+        self.assertTrue(parsed["cache_write_detail_complete"])
+        self.assertEqual(parsed["cache_write_tokens"], 40)
+        expected = 50 * 100 + 10 * 10 + 30 * 125 + 10 * 250 + 20 * 500
+        self.assertEqual(cost_units(parsed), expected)
+        missing = {**usage, "input_tokens_details": {"cached_tokens": 10, "cache_write_tokens": 40}}
+        self.assertFalse(usage_from_response({"usage": missing})["cache_write_detail_complete"])
 
     def test_long_input_pricing_uses_documented_full_request_multipliers(self):
         """Apply the model's surcharge above 272,000 input tokens."""
         at_limit = {"input_tokens": 272_000, "cached_tokens": 1_000, "output_tokens": 100}
         above_limit = {**at_limit, "input_tokens": 272_001}
-        self.assertEqual(cost_units(at_limit), 271_000 * 10 + 1_000 + 100 * 50)
-        self.assertEqual(cost_units(above_limit), (271_001 * 10 + 1_000) * 2 + 100 * 75)
+        self.assertEqual(cost_units(at_limit), 271_000 * 100 + 1_000 * 10 + 100 * 500)
+        self.assertEqual(cost_units(above_limit), (271_001 * 100 + 1_000 * 10) * 2 + 100 * 750)
 
     def test_session_cost_is_partial_if_cache_or_usage_is_unknown(self):
         """Avoid presenting missing usage or cache pricing as exact cost."""
@@ -351,6 +450,7 @@ class PageOneRouteTests(unittest.TestCase):
         self.folder = tempfile.TemporaryDirectory()
         self.transcript_calls = []
         self.summary_calls = []
+        self.batch_requests = []
         self.chat_calls = []
         self.topic_calls = []
 
@@ -370,12 +470,14 @@ class PageOneRouteTests(unittest.TestCase):
                 usage_callback(usage_from_response({"usage": SAMPLE_USAGE}))
             return ["Evidence", "Methods", "Other"][:len(titles)]
 
-        def summary_function(title, transcript, preferences, usage_callback=None):
-            """Return one grounded fixture summary and record its preference."""
-            self.summary_calls.append((title, transcript, preferences))
+        def batch_summary_function(videos, preferences, usage_callback=None):
+            """Return fixture summaries in one call for the selected group."""
+            self.batch_requests.append([video["video_id"] for video in videos])
+            for video in videos:
+                self.summary_calls.append((video["video_title"], video["transcript"], preferences))
             if usage_callback:
                 usage_callback(usage_from_response({"usage": SAMPLE_USAGE}))
-            return {"summary": "A short source-grounded summary."}
+            return {video["video_id"]: {"summary": "A short source-grounded summary."} for video in videos}
 
         def chat_function(title, transcript, summary, question, history, usage_callback=None):
             """Answer a video question without calling an AI provider."""
@@ -389,7 +491,7 @@ class PageOneRouteTests(unittest.TestCase):
             source_fetcher=source_fetcher,
             transcript_fetcher=transcript_fetcher,
             topic_function=topic_function,
-            summary_function=summary_function,
+            batch_summary_function=batch_summary_function,
             chat_function=chat_function,
         )
         self.app.config["TESTING"] = True
@@ -503,6 +605,18 @@ class PageOneRouteTests(unittest.TestCase):
         self.assertNotIn("Secret transcript text", log_text)
         self.assertIn("A short source-grounded summary", archive_text)
 
+    def test_three_selected_videos_share_one_ai_summary_request(self):
+        """Send a selected playlist as one AI batch when it fits."""
+        self.inspect_playlist()
+        self.submit_and_wait("/sources/playlist:PLVANSOs5ny50", {
+            "csrf_token": self.csrf, "list_action": "summarize",
+            "video_ids": ["GmBG-26_Izw", "aBcdEF_1234", "bCdeFG_2345"],
+        })
+        self.assertEqual(len(self.batch_requests), 1)
+        self.assertEqual(len(self.batch_requests[0]), 3)
+        self.assertEqual(len(self.app.config["STORE"].read()["summaries"]), 3)
+        self.assertEqual(self.app.config["USAGE"].snapshot(self.session_id)["api_calls"], 2)
+
     def test_chat_saves_follow_up_and_usage_counter(self):
         """Save a new dynamic video answer and record its reported tokens."""
         self.inspect_playlist()
@@ -557,6 +671,178 @@ class PageOneRouteTests(unittest.TestCase):
         self.assertIn(str(Path(self.folder.name) / "pageone.json").encode(), self.client.get("/archive").data)
         self.assertIn(str(Path(self.folder.name) / "pageone.log").encode(), self.client.get("/settings").data)
 
+    def test_custom_lists_copy_move_and_delete_without_duplication(self):
+        """Change memberships while keeping one canonical summary and chat."""
+        self.inspect_playlist()
+        self.submit_summary()
+        first = self.client.post("/lists", data={"csrf_token": self.csrf, "title": "Reading desk"})
+        second = self.client.post("/lists", data={"csrf_token": self.csrf, "title": "Later"})
+        first_id = first.headers["Location"].split("/archive/")[1]
+        second_id = second.headers["Location"].split("/archive/")[1]
+        copy = self.client.post("/archive/playlist:PLVANSOs5ny50/transfer", data={
+            "csrf_token": self.csrf, "video_id": "GmBG-26_Izw", "target_list": first_id, "action": "copy",
+        })
+        self.assertEqual(copy.status_code, 302)
+        archive = self.app.config["STORE"].read()
+        self.assertIn("GmBG-26_Izw", archive["summary_lists"][first_id]["video_ids"])
+        self.assertIn("GmBG-26_Izw", archive["summary_lists"]["playlist:PLVANSOs5ny50"]["video_ids"])
+        moved = self.client.post(f"/archive/{first_id}/transfer", data={
+            "csrf_token": self.csrf, "video_id": "GmBG-26_Izw", "target_list": second_id, "action": "move",
+        })
+        self.assertEqual(moved.status_code, 302)
+        archive = self.app.config["STORE"].read()
+        self.assertNotIn("GmBG-26_Izw", archive["summary_lists"][first_id]["video_ids"])
+        self.assertIn("GmBG-26_Izw", archive["summary_lists"][second_id]["video_ids"])
+        self.assertEqual(len(archive["summaries"]), 1)
+        rejected = self.client.post(f"/lists/{second_id}/delete", data={"csrf_token": self.csrf})
+        self.assertIn(b"Confirm the list deletion", rejected.data)
+        self.client.post(f"/lists/{second_id}/delete", data={"csrf_token": self.csrf, "confirm": "yes"})
+        self.assertIn("GmBG-26_Izw", self.app.config["STORE"].read()["summaries"])
+        self.client.post("/videos/GmBG-26_Izw/delete", data={"csrf_token": self.csrf, "confirm": "yes"})
+        archive = self.app.config["STORE"].read()
+        self.assertNotIn("GmBG-26_Izw", archive["summaries"])
+        self.assertNotIn("GmBG-26_Izw", archive["summary_lists"]["playlist:PLVANSOs5ny50"]["video_ids"])
+
+    def test_home_adds_only_single_video_to_existing_list(self):
+        """Give a playlist its own list and add one video to the chosen list."""
+        created = self.client.post("/lists", data={"csrf_token": self.csrf, "title": "My notes"})
+        list_id = created.headers["Location"].split("/archive/")[1]
+
+        def one_video(kind, source_id):
+            """Return one row only for a playlist with a single video."""
+            source = make_video_source(kind, source_id)
+            if kind == "playlist" and source_id == "PLVANSOs5ny51":
+                source["videos"] = source["videos"][:1]
+            return source
+
+        self.app.config["SOURCE_FETCHER"] = one_video
+        playlist_job, _ = self.submit_and_wait("/inspect", {
+            "csrf_token": self.csrf, "source_url": "https://www.youtube.com/playlist?list=PLVANSOs5ny50",
+            "target_list": list_id,
+        })
+        self.assertEqual(playlist_job["status"], "complete")
+        archive = self.app.config["STORE"].read()
+        self.assertEqual(archive["summary_lists"][list_id]["video_ids"], [])
+        self.assertIn("playlist:PLVANSOs5ny50", archive["summary_lists"])
+        self.submit_and_wait("/inspect", {
+            "csrf_token": self.csrf, "source_url": "https://www.youtube.com/playlist?list=PLVANSOs5ny51",
+            "target_list": list_id,
+        })
+        archive = self.app.config["STORE"].read()
+        self.assertNotIn("playlist:PLVANSOs5ny51", archive["summary_lists"])
+        self.assertEqual(archive["summary_lists"][list_id]["video_ids"], ["GmBG-26_Izw"])
+        job, response = self.submit_and_wait("/inspect", {
+            "csrf_token": self.csrf, "source_url": "https://www.youtube.com/watch?v=GmBG-26_Izw",
+            "target_list": list_id,
+        })
+        self.assertEqual(job["status"], "complete")
+        archive = self.app.config["STORE"].read()
+        self.assertEqual(archive["summary_lists"][list_id]["video_ids"], ["GmBG-26_Izw"])
+        self.assertIn("GmBG-26_Izw", archive["summaries"])
+        self.assertIn(b"A careful study", response.data)
+        self.assertNotIn(b"Single video summaries", self.client.get("/archive").data)
+
+    def test_repeat_playlist_adds_new_summaries_and_requires_refresh_approval(self):
+        """Summarize only new IDs until the explicit replace box is checked."""
+        self.inspect_playlist()
+        self.submit_summary()
+        old_summary = self.app.config["STORE"].read()["summaries"]["GmBG-26_Izw"]["summary"]
+
+        def expanded_source(kind, source_id):
+            """Add one newly published fixture video to the old playlist."""
+            source = make_video_source(kind, source_id)
+            source["videos"].append({
+                "id": "cDefGH_3456", "title": "New evidence lecture",
+                "url": "https://www.youtube.com/watch?v=cDefGH_3456",
+                "published_at": "2026-10-23", "author": "C. Author", "topic": "Other",
+            })
+            return source
+
+        self.app.config["SOURCE_FETCHER"] = expanded_source
+        job, _ = self.submit_and_wait("/inspect", {
+            "csrf_token": self.csrf, "source_url": "https://www.youtube.com/playlist?list=PLVANSOs5ny50",
+        })
+        self.assertEqual(job["status"], "complete")
+        archive = self.app.config["STORE"].read()
+        self.assertEqual(archive["summaries"]["GmBG-26_Izw"]["summary"], old_summary)
+        self.assertIn("cDefGH_3456", archive["summaries"])
+        self.assertIn("cDefGH_3456", archive["summary_lists"]["playlist:PLVANSOs5ny50"]["video_ids"])
+        self.assertEqual(len(self.summary_calls), 2)
+
+        def replaced_summary(videos, preferences, usage_callback=None):
+            """Mark each approved batch item with changed fixture prose."""
+            self.batch_requests.append([video["video_id"] for video in videos])
+            for video in videos:
+                self.summary_calls.append((video["video_title"], video["transcript"], preferences))
+            return {video["video_id"]: {"summary": "Approved replacement."} for video in videos}
+
+        self.app.config["BATCH_SUMMARY_FUNCTION"] = replaced_summary
+        self.submit_and_wait("/inspect", {
+            "csrf_token": self.csrf, "source_url": "https://www.youtube.com/playlist?list=PLVANSOs5ny50",
+            "replace_saved": "yes",
+        })
+        archive = self.app.config["STORE"].read()
+        self.assertEqual(archive["summaries"]["GmBG-26_Izw"]["summary"], "Approved replacement.")
+        self.assertEqual(len(self.summary_calls), 6)
+
+    def test_general_settings_persist_and_control_repeat_behavior(self):
+        """Save display sorts and disable automatic new-video summaries."""
+        response = self.client.post("/settings", data={
+            "csrf_token": self.csrf, "settings_form": "yes",
+            "summary_preferences": "Keep evidence visible.",
+            "default_playlist_sort": "title", "archive_sort": "title",
+            "interface_scale": "large", "reading_width": "focused",
+        })
+        self.assertIn(b"Summary preferences saved", response.data)
+        saved = self.app.config["STORE"].read()["settings"]
+        self.assertEqual(saved, {
+            "default_playlist_sort": "title", "archive_sort": "title", "auto_summarize_new": False,
+            "interface_scale": "large", "reading_width": "focused",
+        })
+        self.inspect_playlist()
+        self.assertIn(b'value="title"', self.client.get("/settings").data)
+        source_page = self.client.get("/sources/playlist:PLVANSOs5ny50")
+        self.assertIn(b'name="sort_by" value="title"', source_page.data)
+
+        def expanded_source(kind, source_id):
+            """Add one new item to a repeat playlist fixture."""
+            source = make_video_source(kind, source_id)
+            source["videos"].append({
+                "id": "cDefGH_3456", "title": "A new research note",
+                "url": "https://www.youtube.com/watch?v=cDefGH_3456",
+                "published_at": "2026-10-23", "author": "C. Author", "topic": "Other",
+            })
+            return source
+
+        self.app.config["SOURCE_FETCHER"] = expanded_source
+        self.submit_and_wait("/inspect", {
+            "csrf_token": self.csrf, "source_url": "https://www.youtube.com/playlist?list=PLVANSOs5ny50",
+        })
+        archive = self.app.config["STORE"].read()
+        self.assertIn("cDefGH_3456", archive["summary_lists"]["playlist:PLVANSOs5ny50"]["video_ids"])
+        self.assertNotIn("cDefGH_3456", archive["summaries"])
+
+    def test_playlist_recheck_keeps_manual_moves_and_recreates_deleted_list(self):
+        """Keep a moved title out until its list is explicitly recreated."""
+        self.inspect_playlist()
+        created = self.client.post("/lists", data={"csrf_token": self.csrf, "title": "Selected"})
+        list_id = created.headers["Location"].split("/archive/")[1]
+        moved = self.client.post("/archive/playlist:PLVANSOs5ny50/transfer", data={
+            "csrf_token": self.csrf, "video_id": "GmBG-26_Izw", "target_list": list_id,
+            "action": "move",
+        })
+        self.assertEqual(moved.status_code, 302)
+        self.inspect_playlist()
+        archive = self.app.config["STORE"].read()
+        self.assertNotIn("GmBG-26_Izw", archive["summary_lists"]["playlist:PLVANSOs5ny50"]["video_ids"])
+        self.assertIn("GmBG-26_Izw", archive["summary_lists"][list_id]["video_ids"])
+        self.client.post("/lists/playlist:PLVANSOs5ny50/delete", data={
+            "csrf_token": self.csrf, "confirm": "yes",
+        })
+        self.inspect_playlist()
+        restored = self.app.config["STORE"].read()["summary_lists"]["playlist:PLVANSOs5ny50"]
+        self.assertEqual(len(restored["video_ids"]), 3)
+
     def test_csrf_blank_preferences_and_empty_selection_are_reported(self):
         """Reject missing form tokens and explain blank preference or selection."""
         rejected = self.client.post("/settings", data={"summary_preferences": "Try again"})
@@ -569,15 +855,15 @@ class PageOneRouteTests(unittest.TestCase):
         })
         self.assertIn(b"Select at least one video", response.data)
 
-    def test_usage_meter_is_present_without_script_or_aria_markup(self):
-        """Keep the global meter on pages with no script or ARIA markup."""
+    def test_usage_meter_and_local_visual_script_are_present(self):
+        """Keep the global meter beside the local visual-only script."""
         response = self.client.get("/")
         self.assertIn(b'class="usage-meter"', response.data)
         self.assertIn(b"$0.00000000", response.data)
         self.assertNotIn(b"$$", response.data)
-        self.assertNotIn(b"<script", response.data.lower())
+        self.assertIn(b"static/js/reading_position.js", response.data)
         self.assertNotIn(b"aria-", response.data.lower())
-        self.assertEqual(response.headers["Content-Security-Policy"].split("script-src ")[1].split(";")[0], "'none'")
+        self.assertEqual(response.headers["Content-Security-Policy"].split("script-src ")[1].split(";")[0], "'self'")
 
 
 class NestingDepthTests(unittest.TestCase):
@@ -593,7 +879,7 @@ class NestingDepthTests(unittest.TestCase):
             return max([current_depth, *(walk(child, current_depth) for child in ast.iter_child_nodes(node))])
 
         depths = {}
-        runtime_files = ("app.py", "run.py", "storage.py", "youtube_source.py", "summary_service.py", "usage_accounting.py")
+        runtime_files = ("app.py", "run.py", "archive_storage.py", "youtube_source.py", "ai_summaries.py", "usage_accounting.py")
         for file_name in runtime_files:
             tree = ast.parse((APP_DIRECTORY / file_name).read_text(encoding="utf-8"))
             depths[file_name] = walk(tree)
