@@ -117,6 +117,8 @@ Then follow the key steps above and start with `.venv/bin/python run.py`.
 
 Use the **Save to** choice on Home to add a single video to an existing list. A playlist with several videos gets its own list. Saved summaries are reused; choose the replacement option only when you want to overwrite them.
 
+To continue later, use **Continue a saved list or video** on Home. Choose an entry, then **Choose videos** to open its saved items, or **Retry missing** to summarize only items that do not already have a saved summary. In **Archive**, check one or more entries to summarize or retry their videos together. Open one entry to select specific videos; **Select all matching** follows the current title filter. On an entry page, you can also copy or move selected videos to another list, or delete selected summaries after checking the confirmation box. **Retry missing** keeps completed summaries. Replacing existing summaries requires the explicit replace checkbox, except **Summarize again** on an individual saved video, which is itself the explicit replacement action.
+
 ## Your saved information
 
 PageOne creates a **user data** folder beside `run.py`:
@@ -153,6 +155,7 @@ You do not need to edit these files to use PageOne. Expand this list only if you
 | `youtube_source.py` | Reads YouTube titles and English captions. |
 | `ai_summaries.py` | Requests summaries, topic labels, and follow-up answers. |
 | `archive_storage.py` | Reads and safely saves notes and settings. |
+| `archive_actions.py` | Resolves selected saved entries and applies bulk summary and list-membership actions. |
 | `data_paths.py` | Chooses save locations and preserves older saved files. |
 | `usage_accounting.py` | Counts session tokens and estimates their cost. |
 | `requirements.txt` | Lists the packages needed to use the app. |
@@ -172,6 +175,7 @@ You do not need to edit these files to use PageOne. Expand this list only if you
 | `templates/retry_result.html` | Displays the result of retrying one video. |
 | `templates/archive.html` | Lists your saved playlists, lists, and videos. |
 | `templates/archive_detail.html` | Opens one saved list and its video notes. |
+| `templates/archive_batch_controls.html` | Provides bulk selection, summary, retry, transfer, and deletion controls. |
 | `templates/chat_progress.html` | Shows progress while a follow-up answer is written. |
 | `templates/chat_answer.html` | Shows a follow-up answer or a retry option. |
 | `templates/settings.html` | Shows writing and display preferences. |
@@ -191,6 +195,7 @@ You do not need to edit these files to use PageOne. Expand this list only if you
 | `tests/test_source_fallback.py` | Checks the alternative YouTube reader offline. |
 | `tests/test_data_paths.py` | Checks save locations and preservation of older files. |
 | `tests/test_inline_actions.py` | Checks retries and selections across list pages. |
+| `tests/test_archive_actions.py` | Checks bulk archive selections and actions. |
 | `tests/startup_smoke.py` | Checks normal startup and the missing-software notice. |
 | `tests/visual_test.py` | Checks the full browser workflow and screen sizes. |
 | `tests/inline_browser_test.py` | Checks in-page actions and recovery from failed requests. |

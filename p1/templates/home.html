@@ -20,6 +20,21 @@
       <p>Only replaces saved text when checked.</p>
     </div>
   </form>
-  {% with active_stage=1 %}{% include 'workflow_steps.html' %}{% endwith %}
+  {% if saved_entries %}
+  <form class="home-resume-form" method="post" action="{{ url_for('archive_actions') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="guide-heading" for="saved-entry">Continue a saved list or video</label>
+    <div class="resume-controls">
+      <select id="saved-entry" name="entry_ids" required>
+        <option value="">Choose saved work</option>
+        {% for entry in saved_entries %}<option value="{{ entry.source_key }}">{{ entry.title }}</option>{% endfor %}
+      </select>
+      <button class="text-button" type="submit" name="action" value="reopen">Choose videos</button>
+      <button class="text-button" type="submit" name="action" value="retry">↻ Retry missing</button>
+    </div>
+    <p class="muted">Retry missing keeps completed summaries. Choose videos to make a new selection or replace saved text.</p>
+  </form>
+  {% endif %}
+  <p class="home-steps">Open a link <span>·</span> Choose videos <span>·</span> Read &amp; ask</p>
 </section>
 {% endblock %}

@@ -117,7 +117,8 @@
     destination.querySelectorAll(".local-request-status, .local-request-error").forEach((node) => {
       if (node !== status) node.remove();
     });
-    const submitButtons = [...form.querySelectorAll('button[type="submit"], input[type="submit"], .video-check input')];
+    const controls = form instanceof HTMLFormElement ? [...form.elements] : [...form.querySelectorAll("button, input")];
+    const submitButtons = controls.filter((control) => control.matches('button[type="submit"], input[type="submit"], .video-check input, .archive-check'));
     const oldDisabled = submitButtons.map((button) => button.disabled);
     submitButtons.forEach((button) => { button.disabled = true; });
     let statusNode = status || setLoading(form, "Sending…");
@@ -159,8 +160,11 @@
         const contentType = response.headers.get("content-type") || "";
         if (!contentType.toLowerCase().includes("text/html")) throw new Error("The server did not return an HTML page.");
         const html = await response.text();
-        if (!response.ok) throw new Error(`The request failed (${response.status}).`);
         const parsed = new DOMParser().parseFromString(html, "text/html");
+        if (!response.ok) {
+          const notice = parsed.querySelector(".failure-notice p");
+          throw new Error(notice?.textContent || `The request failed (${response.status}).`);
+        }
         if (!parsed.querySelector(".main-content") || !parsed.querySelector(".usage-meter")) throw new Error("The server returned an incomplete page.");
 
         const nextUrl = refreshUrl(parsed, response.url || url.href);

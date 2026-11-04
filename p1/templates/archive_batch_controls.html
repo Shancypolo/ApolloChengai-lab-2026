@@ -1,0 +1,30 @@
+<form id="archive-bulk-form" class="archive-bulk-form" method="post" action="{{ url_for('archive_actions') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {% if source is defined %}
+  <input type="hidden" name="source_key" value="{{ source.source_key }}">
+  <input type="hidden" name="filter_text" value="{{ filter_text }}">
+  {% else %}
+  <input type="hidden" name="q" value="{{ query }}">
+  {% endif %}
+  <div class="archive-selection-actions">
+    <span class="guide-heading">Select {{ 'videos' if source is defined else 'lists or videos' }} for a batch action</span>
+    <button class="text-button" type="submit" name="action" value="select_all">Select all matching</button>
+    <button class="text-button" type="submit" name="action" value="select_none">Clear selection</button>
+    <button class="button primary-action" type="submit" name="action" value="summarize">✨ Summarize selected</button>
+    <button class="text-button" type="submit" name="action" value="retry">↻ Retry missing</button>
+  </div>
+  <label class="small-check"><input type="checkbox" name="replace_saved" value="yes"> Replace saved summaries for the selection</label>
+  <p class="batch-help">Retry missing keeps finished summaries. Replacing saved text requires the checkbox above.</p>
+  {% if source is defined %}
+  <div class="archive-manage-actions">
+    {% if targets %}
+    <label class="small-check" for="batch-target">Destination list</label>
+    <select id="batch-target" name="target_list"><option value="">Choose a list</option>{% for item in targets %}<option value="{{ item.id }}">{{ item.title }}</option>{% endfor %}</select>
+    <button class="text-button" type="submit" name="action" value="copy">⧉ Copy selected</button>
+    <button class="text-button" type="submit" name="action" value="move">→ Move selected</button>
+    {% endif %}
+    <label class="small-check"><input type="checkbox" name="confirm" value="yes"> Confirm deletion</label>
+    <button class="text-button" type="submit" name="action" value="delete_summaries">Delete selected summaries</button>
+  </div>
+  {% endif %}
+</form>

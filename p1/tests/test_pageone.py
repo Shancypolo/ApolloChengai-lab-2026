@@ -887,7 +887,7 @@ class NestingDepthTests(unittest.TestCase):
             return max([current_depth, *(walk(child, current_depth) for child in ast.iter_child_nodes(node))])
 
         depths = {}
-        runtime_files = ("app.py", "run.py", "data_paths.py", "archive_storage.py", "youtube_source.py", "ai_summaries.py", "usage_accounting.py")
+        runtime_files = ("app.py", "run.py", "data_paths.py", "archive_storage.py", "archive_actions.py", "youtube_source.py", "ai_summaries.py", "usage_accounting.py")
         for file_name in runtime_files:
             tree = ast.parse((APP_DIRECTORY / file_name).read_text(encoding="utf-8"))
             depths[file_name] = walk(tree)

@@ -143,6 +143,7 @@ class InlineActionContracts(unittest.TestCase):
         previous_jobs = set(self.app.config["JOBS"]._jobs)
         retried = self.client.post(f"/retry-video/{source_key}/vid00000000", data={"csrf_token": self.csrf})
         self.assertEqual(retried.status_code, 200)
+        self.assertIn(b'http-equiv="refresh"', retried.data)
         retry_job_id = (set(self.app.config["JOBS"]._jobs) - previous_jobs).pop()
         self.assertEqual(self.app.config["JOBS"].get(retry_job_id)["retry_video"], "vid00000000")
         retry_job = self.wait_for_job(retry_job_id)
