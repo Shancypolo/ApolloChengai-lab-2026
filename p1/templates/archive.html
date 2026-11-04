@@ -16,9 +16,16 @@
   </form>
 </div>
 {% if not groups.playlists and not groups.custom and not groups.single %}<div class="empty-state"><h2>Nothing saved yet</h2></div>{% endif %}
+{% if groups.playlists or groups.custom or groups.single %}{% include "archive_batch_controls.html" %}{% endif %}
+{% if selection_notice %}<p class="notice">{{ selection_notice }}</p>{% endif %}
 {% for group_title, group_icon, rows in [('Playlist summaries', '▶️', groups.playlists), ('Custom lists', '📂', groups.custom), ('Single video summaries', '🎬', groups.single)] %}
 {% if rows %}<section class="archive-group"><h2><span class="icon-emoji">{{ group_icon }}</span> {{ group_title }}</h2><div class="archive-list">
-  {% for source in rows %}<a class="archive-row" href="{{ url_for('archive_detail', source_key=source.source_key) }}"><span class="archive-item"><strong>{{ source.title }}</strong></span><span class="archive-open-hint">Open list →</span></a>{% endfor %}
+  {% for source in rows %}
+  <div class="archive-choice-row">
+    <input class="archive-check" type="checkbox" name="entry_ids" value="{{ source.source_key }}" form="archive-bulk-form" title="Select {{ source.title }}" {% if source.source_key in selected_entries %}checked{% endif %}>
+    <a class="archive-row" href="{{ url_for('archive_detail', source_key=source.source_key) }}"><span class="archive-item"><strong>{{ source.title }}</strong></span><span class="archive-open-hint">Open list →</span></a>
+  </div>
+  {% endfor %}
 </div></section>{% endif %}
 {% endfor %}
 <p class="file-caption archive-file-caption">Archive file: {{ archive_file }}</p>

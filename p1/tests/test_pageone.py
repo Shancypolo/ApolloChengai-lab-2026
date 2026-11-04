@@ -799,6 +799,14 @@ class PageOneRouteTests(unittest.TestCase):
             "default_playlist_sort": "title", "archive_sort": "title", "auto_summarize_new": False,
             "interface_scale": "large", "reading_width": "focused",
         })
+        archive_path = Path(self.folder.name) / "userdata.json"
+        self.assertEqual(self.app.config["STORE"].file_path, archive_path)
+        on_disk = json.loads(archive_path.read_text(encoding="utf-8"))
+        self.assertEqual(on_disk["settings"], saved)
+        restarted_app = create_app(self.folder.name)
+        reopened_settings = restarted_app.test_client().get("/settings")
+        self.assertIn(b"Keep evidence visible.", reopened_settings.data)
+        self.assertIn(b'scale-large width-focused', reopened_settings.data)
         self.inspect_playlist()
         self.assertIn(b'value="title"', self.client.get("/settings").data)
         source_page = self.client.get("/sources/playlist:PLVANSOs5ny50")
@@ -879,7 +887,7 @@ class NestingDepthTests(unittest.TestCase):
             return max([current_depth, *(walk(child, current_depth) for child in ast.iter_child_nodes(node))])
 
         depths = {}
-        runtime_files = ("app.py", "run.py", "data_paths.py", "archive_storage.py", "youtube_source.py", "ai_summaries.py", "usage_accounting.py")
+        runtime_files = ("app.py", "run.py", "data_paths.py", "archive_storage.py", "archive_actions.py", "youtube_source.py", "ai_summaries.py", "usage_accounting.py")
         for file_name in runtime_files:
             tree = ast.parse((APP_DIRECTORY / file_name).read_text(encoding="utf-8"))
             depths[file_name] = walk(tree)

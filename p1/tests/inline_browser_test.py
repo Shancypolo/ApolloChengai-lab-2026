@@ -75,7 +75,11 @@ def main() -> None:
             usage_callback(fixture_usage)
         return "Recovered answer from the fixture provider."
 
+    summary_calls = []
+
     def batch_summary(videos, preferences, usage_callback=None):
+        """Record requested IDs and return fake summaries without network calls."""
+        summary_calls.append([video["video_id"] for video in videos])
         if usage_callback:
             usage_callback(fixture_usage)
         return {
@@ -181,6 +185,57 @@ def main() -> None:
             page.set_viewport_size({"width": 3440, "height": 1100})
             assert_no_horizontal_overflow(page, 3440, 1100)
             page.screenshot(path=str(screenshot_directory / "inline-answer-ultrawide.png"), full_page=True)
+
+            # Saved archive actions use the same inline transport and preserve selection state.
+            page.locator('.site-nav a[href="/"]').click()
+            page.locator("#saved-entry").wait_for()
+            for width, height in ((280, 900), (3440, 1100)):
+                assert_no_horizontal_overflow(page, width, height)
+                page.screenshot(path=str(screenshot_directory / f"home-resume-{width}.png"), full_page=True)
+            page.set_viewport_size({"width": 1365, "height": 900})
+            page.screenshot(path=str(screenshot_directory / "home-resume-wide.png"), full_page=True)
+            page.locator("#saved-entry").select_option("playlist:PLfixture123")
+            navigations_before_action = len(navigations)
+            page.locator('.home-resume-form button[name="action"][value="reopen"]').click()
+            expect(page.locator(".archive-summary input.archive-check:checked")).to_have_count(3)
+            assert len(navigations) == navigations_before_action
+
+            first_card = page.locator(".archive-summary").first
+            first_card.locator("summary input.archive-check").uncheck()
+            assert not first_card.evaluate("el => el.open"), "Selecting a video opened its disclosure."
+            assert len(navigations) == navigations_before_action
+            page.locator('#archive-bulk-form button[name="action"][value="select_none"]').click()
+            expect(page.locator(".archive-summary input.archive-check:checked")).to_have_count(0)
+            assert len(navigations) == navigations_before_action
+            page.locator('#archive-bulk-form button[name="action"][value="select_all"]').click()
+            expect(page.locator(".archive-summary input.archive-check:checked")).to_have_count(3)
+            assert len(navigations) == navigations_before_action
+
+            provider_calls_before = len(summary_calls)
+            page.locator('#archive-bulk-form button[name="action"][value="summarize"]').click()
+            page.get_by_text("BATCH COMPLETE", exact=True).wait_for(timeout=15_000)
+            assert len(summary_calls) == provider_calls_before, "Summarizing saved selections repeated provider calls."
+            assert len(navigations) == navigations_before_action
+
+            page.locator('.site-nav a[href="/"]').click()
+            page.locator("#saved-entry").select_option("playlist:PLfixture123")
+            provider_calls_before = len(summary_calls)
+            navigations_before_action = len(navigations)
+            page.locator('.home-resume-form button[name="action"][value="retry"]').click()
+            page.get_by_text("BATCH COMPLETE", exact=True).wait_for(timeout=15_000)
+            assert len(summary_calls) == provider_calls_before, "Retry missing summarized already-saved videos."
+            assert len(navigations) == navigations_before_action
+
+            page.locator('.site-nav a[href="/archive"]').click()
+            page.locator('.archive-row').filter(has_text="Fixture playlist").click()
+            page.locator(".archive-summary").first.locator("summary").click()
+            provider_calls_before = len(summary_calls)
+            navigations_before_action = len(navigations)
+            page.locator('.archive-summary-action button[name="action"][value="summarize"]').first.click()
+            page.get_by_text("BATCH COMPLETE", exact=True).wait_for(timeout=15_000)
+            assert summary_calls[provider_calls_before:] == [["GmBG-26_Izw"]]
+            assert len(navigations) == navigations_before_action
+
             assert not page_errors, f"Browser errors: {page_errors}"
             browser.close()
     finally:

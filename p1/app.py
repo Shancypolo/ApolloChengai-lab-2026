@@ -22,6 +22,10 @@ from archive_storage import (
     ArchiveStore, DEFAULT_PREFERENCES, DEFAULT_SETTINGS,
     INTERFACE_SCALE_OPTIONS, READING_WIDTH_OPTIONS,
 )
+from archive_actions import (
+    delete_selected_summaries, list_source, selected_detail_source,
+    selected_sources, selected_video_sources, transfer_memberships, video_row_for_id,
+)
 from data_paths import (
     ARCHIVE_FILE_NAME, LOG_FILE_NAME, default_data_directory, migrate_data_files,
 )
@@ -46,6 +50,10 @@ MAX_FILTER_LENGTH = 200
 MAX_LIST_TITLE_LENGTH = 120
 VIDEOS_PER_PAGE = 48
 VIDEO_SORT_OPTIONS = {"original", "published_at", "author", "topic", "title"}
+ARCHIVE_ACTIONS = {
+    "select_all", "select_none", "reopen", "summarize", "retry",
+    "copy", "move", "delete_summaries",
+}
 VIDEO_SORT_LABELS = (
     ("original", "Playlist order"),
     ("published_at", "Publish date"),
@@ -193,12 +201,15 @@ def update_saved_summary(
         if source_key not in old_source_keys:
             old_source_keys.append(source_key)
         chat_history = old_summary.get("chat", [])
+        topic = clean_video_topic(archive["sources"].get(source_key, {}), video_id)
+        if topic == "Other":
+            topic = str(video_row_for_id(archive, video_id).get("topic") or "Other")
         archive["summaries"][video_id] = {
             "video_id": video_id,
             "title": title,
             "source_keys": old_source_keys,
             "summary": result["summary"],
-            "topics": [clean_video_topic(archive["sources"].get(source_key, {}), video_id)],
+            "topics": [topic],
             "created_at": old_summary.get("created_at", now_utc()),
             "updated_at": now_utc(),
             "chat": chat_history,
@@ -366,30 +377,6 @@ def add_video_to_list(store: ArchiveStore, list_id: str, video_id: str) -> None:
     store.update(change)
 
 
-def video_row_for_id(archive: dict[str, Any], video_id: str) -> dict[str, Any]:
-    """Find saved metadata for a video listed in any source."""
-    for source in archive["sources"].values():
-        for video in source.get("videos", []):
-            if video.get("id") == video_id:
-                return video
-    saved = archive["summaries"].get(video_id, {})
-    return {
-        "id": video_id, "title": saved.get("title", "Untitled video"),
-        "url": f"https://www.youtube.com/watch?v={video_id}",
-        "published_at": "Unknown", "author": "Unknown",
-        "topic": ", ".join(saved.get("topics", [])) or "Other",
-    }
-
-
-def list_source(archive: dict[str, Any], summary_list: dict[str, Any]) -> dict[str, Any]:
-    """Shape a saved list for the existing archive detail template."""
-    return {
-        "source_key": summary_list["id"], "kind": summary_list["kind"],
-        "title": summary_list["title"], "url": "",
-        "videos": [video_row_for_id(archive, video_id) for video_id in summary_list["video_ids"]],
-    }
-
-
 def archive_groups(archive: dict[str, Any], query: str) -> dict[str, list[dict[str, Any]]]:
     """Group matching playlist lists, custom lists, and single videos."""
     search_text = query.strip().casefold()[:MAX_FILTER_LENGTH]
@@ -492,6 +479,7 @@ def save_batch_results(
     results: dict[str, dict[str, str]],
     succeeded: int,
     failed: list[dict[str, str]],
+    source_keys: dict[str, str] | None = None,
 ) -> int:
     """Save each returned summary and report individual storage failures."""
     registry: JobRegistry = app.config["JOBS"]
@@ -499,7 +487,7 @@ def save_batch_results(
     for video in batch:
         try:
             update_saved_summary(
-                store, source_key, video["video_id"],
+                store, (source_keys or {}).get(video["video_id"], source_key), video["video_id"],
                 video["video_title"], results[video["video_id"]],
             )
             succeeded += 1
@@ -520,6 +508,7 @@ def run_summary_job(
     video_ids: list[str],
     refresh: bool,
     session_id: str,
+    source_keys: dict[str, str] | None = None,
 ) -> None:
     """Fetch captions, then summarize bounded groups without parallel calls."""
     registry: JobRegistry = app.config["JOBS"]
@@ -532,10 +521,11 @@ def run_summary_job(
         succeeded = 0
         pending: list[dict[str, str]] = []
         for index, video_id in enumerate(video_ids, start=1):
+            video_source_key = (source_keys or {}).get(video_id, source["source_key"])
             registry.update(job_id, message=f"Reading captions {index} of {len(video_ids)}.")
             existing = store.read()["summaries"].get(video_id)
             if existing and not refresh:
-                link_existing_summary(store, source["source_key"], video_id)
+                link_existing_summary(store, video_source_key, video_id)
                 succeeded += 1
                 registry.update(job_id, finished=succeeded + len(failed), succeeded=succeeded)
                 continue
@@ -573,8 +563,11 @@ def run_summary_job(
                 continue
             succeeded = save_batch_results(
                 app, job_id, source["source_key"], batch, results, succeeded, failed,
+                source_keys=source_keys,
             )
         final_status = "complete" if not failed else "partial"
+        for failure in failed:
+            failure["source_key"] = (source_keys or {}).get(failure.get("video_id", ""), source["source_key"])
         registry.update(
             job_id,
             status=final_status,
@@ -844,7 +837,10 @@ def create_app(
         """Show the source search across the available viewport."""
         archive = app.config["STORE"].read()
         lists = sorted(archive["summary_lists"].values(), key=lambda item: item["title"].casefold())
-        return render_template("home.html", summary_lists=lists)
+        groups = archive_groups(archive, "")
+        saved_entries = [entry for group in groups.values() for entry in group]
+        saved_entries.sort(key=lambda item: item.get("title", "").casefold())
+        return render_template("home.html", summary_lists=lists, saved_entries=saved_entries)
 
     @app.post("/inspect")
     def inspect_source():
@@ -986,7 +982,7 @@ def create_app(
             except ValueError as error:
                 safe_log(app, "Could not render a completed batch", error)
                 return render_template("notice.html", message="Saved items could not be opened. Your data has been kept.", tone="error"), 500
-            source = archive["sources"].get(job["source_key"], {})
+            source = job.get("source") or archive["sources"].get(job["source_key"], {})
             filter_text = request.args.get("filter_text", "")[:MAX_FILTER_LENGTH]
             return render_template(
                 "job_results.html",
@@ -1005,8 +1001,13 @@ def create_app(
         """Show playlist, custom-list, and single-video archive groups."""
         archive = app.config["STORE"].read()
         query = request.args.get("q", "")[:MAX_FILTER_LENGTH]
+        groups = archive_groups(archive, query)
+        selected_entries = request.args.getlist("selected_entry")
+        if request.args.get("selected_entry") == "matching":
+            selected_entries = [entry["source_key"] for rows in groups.values() for entry in rows]
         return render_template(
-            "archive.html", groups=archive_groups(archive, query), query=query,
+            "archive.html", groups=groups, query=query, selected_entries=selected_entries,
+            selection_notice=request.args.get("selection_notice", ""),
             archive_file=str(app.config["STORE"].file_path.resolve()),
         )
 
@@ -1031,6 +1032,13 @@ def create_app(
             abort(404)
         filter_text = request.args.get("filter_text", "")[:MAX_FILTER_LENGTH]
         open_video = request.args.get("open_video", "")
+        selected_ids = request.args.getlist("selected")
+        if request.args.get("selected") == "all":
+            selected_ids = [video["id"] for video in source.get("videos", [])]
+        elif request.args.get("selected") == "matching":
+            selected_ids = [video["id"] for video in filter_summary_videos(source.get("videos", []), archive["summaries"], filter_text)]
+        source_video_ids = {video["id"] for video in source.get("videos", [])}
+        selected_ids = [video_id for video_id in selected_ids if video_id in source_video_ids]
         videos = filter_summary_videos(source.get("videos", []), archive["summaries"], filter_text)
         return render_template(
             "archive_detail.html",
@@ -1039,12 +1047,105 @@ def create_app(
             videos=videos,
             filter_text=filter_text,
             open_video=open_video,
+            selected_ids=selected_ids,
+            selection_notice=request.args.get("selection_notice", ""),
             targets=sorted(
                 [item for item in archive["summary_lists"].values() if item["id"] != source_key],
                 key=lambda item: item["title"].casefold(),
             ),
             can_delete_list=summary_list is not None,
         )
+
+    @app.post("/archive/actions")
+    def archive_actions():
+        """Apply a checked Home or Archive action to saved entries and videos."""
+        action = request.form.get("action", "")
+        if action not in ARCHIVE_ACTIONS:
+            abort(400)
+        store: ArchiveStore = app.config["STORE"]
+        archive = store.read()
+        source_key = request.form.get("source_key", "")
+        entry_ids = request.form.getlist("entry_ids")
+        selected_ids = request.form.getlist("video_ids")
+        try:
+            if action in {"select_all", "select_none"}:
+                if source_key:
+                    selected_detail_source(archive, source_key)
+                    filter_text = request.form.get("filter_text", "")[:MAX_FILTER_LENGTH]
+                    query = {"selected": "matching", "filter_text": filter_text} if action == "select_all" else {"selection_notice": "Selection cleared.", "filter_text": filter_text}
+                    return redirect(url_for("archive_detail", source_key=source_key, **query))
+                index_query = request.form.get("q", "")[:MAX_FILTER_LENGTH]
+                query = {"selected_entry": "matching", "q": index_query} if action == "select_all" else {"selection_notice": "Selection cleared.", "q": index_query}
+                return redirect(url_for("archive_index", **query))
+
+            detail_source = selected_detail_source(archive, source_key) if source_key else None
+            if detail_source:
+                sources = [detail_source]
+                if action == "reopen":
+                    if selected_ids:
+                        selected_video_sources(sources, selected_ids)
+                        return redirect(url_for("archive_detail", source_key=source_key, selected=selected_ids, filter_text=request.form.get("filter_text", "")[:MAX_FILTER_LENGTH]))
+                    return redirect(url_for("archive_detail", source_key=source_key))
+                video_ids, source_keys, videos_by_id = selected_video_sources(sources, selected_ids)
+            else:
+                if action in {"copy", "move", "delete_summaries"}:
+                    raise ValueError("Choose videos from an archive entry first.")
+                index_query = request.form.get("q", "")[:MAX_FILTER_LENGTH]
+                visible_groups = archive_groups(archive, index_query)
+                visible_ids = {entry["source_key"] for rows in visible_groups.values() for entry in rows}
+                if not entry_ids or not set(entry_ids).issubset(visible_ids):
+                    raise ValueError("One or more selected entries are not visible in this archive view.")
+                sources = selected_sources(archive, entry_ids)
+                if action == "reopen":
+                    if len(sources) != 1:
+                        raise ValueError("Reopen one saved entry at a time.")
+                    return redirect(url_for("archive_detail", source_key=sources[0]["source_key"], selected="matching"))
+                video_ids, source_keys, videos_by_id = selected_video_sources(sources)
+
+            if action in {"summarize", "retry"}:
+                replacement = action == "summarize" and request.form.get("replace_saved") == "yes"
+                source_key_for_job = sources[0]["source_key"] if len(sources) == 1 else ""
+                batch_source = {
+                    "source_key": source_key_for_job,
+                    "kind": "selection",
+                    "title": "Selected archive videos",
+                    "videos": list(videos_by_id.values()),
+                }
+                session_id = session["usage_session_id"]
+                job_id = app.config["JOBS"].create("summary", session_id, source_key_for_job, len(video_ids))
+                app.config["JOBS"].update(job_id, source=batch_source)
+                job = app.config["JOBS"].get(job_id)
+                worker = threading.Thread(
+                    target=run_summary_job,
+                    args=(app, job_id, batch_source, video_ids, replacement, session_id, source_keys),
+                    daemon=True, name=f"pageone-{job_id[:8]}",
+                )
+                worker.start()
+                return render_template("job_progress.html", job=job)
+
+            if action in {"copy", "move"}:
+                target_id = request.form.get("target_list", "")
+                def transfer(archive_data: dict[str, Any]) -> None:
+                    """Save the selected list memberships in one atomic write."""
+                    transfer_memberships(archive_data, source_keys, video_ids, target_id, action, now_utc())
+                store.update(transfer)
+                return redirect(url_for("archive_detail", source_key=target_id if action == "move" else source_key, filter_text=request.form.get("filter_text", "")[:MAX_FILTER_LENGTH]))
+
+            if action == "delete_summaries":
+                if request.form.get("confirm") != "yes":
+                    raise ValueError("Confirm the selected summary deletion first.")
+                def delete(archive_data: dict[str, Any]) -> None:
+                    """Remove the confirmed summaries and all their list links."""
+                    delete_selected_summaries(archive_data, video_ids, now_utc())
+                store.update(delete)
+                updated_archive = store.read()
+                if source_key not in updated_archive["summary_lists"] and source_key not in updated_archive["sources"]:
+                    return redirect(url_for("archive_index"))
+                return redirect(url_for("archive_detail", source_key=source_key, filter_text=request.form.get("filter_text", "")[:MAX_FILTER_LENGTH]))
+        except ValueError as error:
+            safe_log(app, "Archive action validation failed", error)
+            return render_template("notice.html", message=str(error), tone="error"), 400
+        return redirect(url_for("archive_index"))
 
     @app.post("/lists")
     def create_summary_list():
@@ -1139,8 +1240,8 @@ def create_app(
             if action == "move" and origin:
                 origin["video_ids"].remove(video_id)
                 origin["updated_at"] = now_utc()
-            if action == "move" and not origin:
-                archive["sources"].pop(source_key, None)
+            if action == "move" and not origin and single:
+                single["archive_as_single"] = False
 
         try:
             app.config["STORE"].update(change)
@@ -1216,19 +1317,22 @@ def create_app(
     def retry_video_summary(source_key: str, video_id: str):
         """Retry one failed video without repeating successful summaries."""
         archive = app.config["STORE"].read()
-        source = archive["sources"].get(source_key)
-        if not source or video_id not in {video["id"] for video in source["videos"]}:
+        try:
+            source = selected_detail_source(archive, source_key)
+            selected_video_sources([source], [video_id])
+        except ValueError:
             abort(404)
         session_id = session["usage_session_id"]
         job_id = app.config["JOBS"].create("summary", session_id, source_key, 1)
-        app.config["JOBS"].update(job_id, retry_video=video_id)
+        app.config["JOBS"].update(job_id, retry_video=video_id, source=source)
+        job = app.config["JOBS"].get(job_id)
         worker = threading.Thread(
             target=run_summary_job,
             args=(app, job_id, source, [video_id], False, session_id),
             daemon=True, name=f"pageone-retry-{job_id[:8]}",
         )
         worker.start()
-        return render_template("job_progress.html", job=app.config["JOBS"].get(job_id))
+        return render_template("job_progress.html", job=job)
 
     return app
 

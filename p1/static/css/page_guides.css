@@ -268,3 +268,84 @@
     grid-column: 1;
   }
 }
+
+/* Saved work can be resumed without pasting the same link again. */
+.home-resume-form {
+  width: min(100%, 1100px);
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
+}
+.resume-controls,
+.archive-selection-actions,
+.archive-manage-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+.resume-controls { margin-top: 8px; }
+.resume-controls select,
+.archive-manage-actions select {
+  min-width: 0;
+  max-width: 100%;
+  padding: 9px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+  font: 14px var(--ui);
+}
+.resume-controls select { flex: 1 1 260px; }
+.home-resume-form .muted { margin: 6px 0 0; font-size: 12px; }
+.home-steps {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font: 12px/1.5 var(--ui);
+  text-align: center;
+}
+.home-steps span { margin: 0 8px; color: #aaa; }
+.source-loading::after { width: min(100%, 160px); height: 1px; margin-top: 24px; }
+
+/* Bulk controls use one form; the checkboxes stay beside their titles. */
+.archive-bulk-form {
+  grid-column: 1 / -1;
+  margin: 10px 0 22px;
+  padding: 16px 0;
+  border-top: 2px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+.archive-selection-actions { margin-bottom: 14px; }
+.archive-selection-actions .guide-heading { flex: 1 1 240px; }
+.archive-manage-actions { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--rule); }
+.batch-help { margin: 6px 0 0; color: var(--muted); font: 12px/1.4 var(--ui); }
+.archive-choice-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--rule);
+}
+.archive-choice-row .archive-row { border-bottom: 0; min-width: 0; }
+.archive-check {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--red);
+  cursor: pointer;
+}
+.archive-summary > summary { grid-template-columns: 22px minmax(0, 1fr) minmax(0, 18%) 72px; }
+.archive-summary-action { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0; }
+.archive-summary-action .batch-help { margin: 0; }
+.archive-video-list > .notice { grid-column: 1 / -1; }
+
+@media (max-width: 700px) {
+  .archive-selection-actions .guide-heading { flex-basis: 100%; }
+  .archive-selection-actions .primary-action { width: 100%; text-align: center; }
+  .archive-summary > summary { grid-template-columns: 22px minmax(0, 1fr) 65px; }
+  .archive-summary .summary-topics { grid-column: 2; grid-row: 2; }
+  .archive-summary .summary-caret { grid-column: 3; grid-row: 1 / span 2; }
+  .archive-choice-row { gap: 10px; }
+  .home-steps { font-size: 11px; }
+  .home-steps span { margin: 0 3px; }
+}
