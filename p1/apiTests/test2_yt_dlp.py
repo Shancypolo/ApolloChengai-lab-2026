@@ -8,7 +8,7 @@ def main():
     """Print public video IDs from one user-supplied playlist."""
     playlist_id = input("Public YouTube playlist ID: ").strip()
     if not playlist_id:
-        raise SystemExit("Playlist ID cannot be blank.")
+        raise SystemExit("Playlist ID cannot be blank.") 
 
     playlist_url = f"https://www.youtube.com/playlist?{urlencode({'list': playlist_id})}"
     options = {
