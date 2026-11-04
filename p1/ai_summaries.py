@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 import unicodedata
 from typing import Any, Callable
 
@@ -74,6 +76,8 @@ BATCH_SUMMARY_SCHEMA = {
 }
 MAX_BATCH_VIDEOS = 12
 MAX_BATCH_CHARACTERS = 200_000
+MAX_API_ATTEMPTS = 4
+RETRY_BACKOFF_SECONDS = 0.5
 TITLE_TOPIC_SCHEMA = {
     "type": "object",
     "properties": {"topics": {"type": "array", "items": {"type": "string"}}},
@@ -168,16 +172,42 @@ def create_response(
     usage_callback: Callable[[dict[str, Any] | None], None] | None,
     **request_data: Any,
 ) -> Any:
-    """Record response usage before attempting to parse returned content."""
-    try:
-        response = ai_client.responses.create(**request_data)
-    except Exception:
+    """Retry transient API failures and record usage for each attempt."""
+    for attempt in range(MAX_API_ATTEMPTS):
+        try:
+            response = ai_client.responses.create(**request_data)
+        except Exception as error:
+            if usage_callback:
+                usage_callback(None)
+            if attempt + 1 >= MAX_API_ATTEMPTS or not _is_retryable_api_error(error):
+                raise
+            logging.getLogger("pageone").warning(
+                "AI attempt %s failed (%s); retrying", attempt + 1, type(error).__name__,
+            )
+            time.sleep(RETRY_BACKOFF_SECONDS * (2 ** attempt))
+            continue
         if usage_callback:
-            usage_callback(None)
-        raise
-    if usage_callback:
-        usage_callback(usage_from_response(response))
-    return response
+            usage_callback(usage_from_response(response))
+        return response
+    raise RuntimeError("The API attempt loop ended unexpectedly.")
+
+
+def _is_retryable_api_error(error: Exception) -> bool:
+    """Retry only connection, timeout, rate-limit, and server failures."""
+    if isinstance(error, (ConnectionError, TimeoutError)):
+        return True
+
+    error_name = type(error).__name__
+    if error_name in {
+        "APIConnectionError", "APITimeoutError", "RateLimitError",
+        "InternalServerError",
+    }:
+        return True
+
+    status_code = getattr(error, "status_code", None)
+    return isinstance(status_code, int) and not isinstance(status_code, bool) and (
+        status_code == 429 or 500 <= status_code <= 599
+    )
 
 
 def summarize_video(

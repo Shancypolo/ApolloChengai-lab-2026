@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Video summary — PageOne{% endblock %}
+{% block content %}
+<section class="retry-result">
+  {% if saved and not job.failed %}
+  <h2>{{ saved.title }}</h2>
+  <p class="summary-prose">{{ saved.summary }}</p>
+  <p class="muted">Summary saved. It will appear when you next open this list.</p>
+  {% else %}
+  <h2>Summary unavailable</h2>
+  {% for failure in job.failed %}<p>{{ failure.message }}</p>{% endfor %}
+  <form class="retry-video-form" data-target="answer" method="post" action="{{ url_for('retry_video_summary', source_key=job.source_key, video_id=job.retry_video) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="button" type="submit">Try again</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

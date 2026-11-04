@@ -63,7 +63,7 @@ def assert_no_horizontal_overflow(page, width: int, height: int) -> None:
 def assert_visual_script_and_no_aria(page) -> None:
     """Confirm only the reading-position helper loads and markup has no ARIA."""
     scripts = page.locator("script")
-    assert scripts.count() == 1
+    assert scripts.count() == 2
     assert scripts.first.get_attribute("src").endswith("/static/js/reading_position.js")
     assert page.locator("script:not([src])").count() == 0
     page_markup = page.content()
@@ -138,18 +138,23 @@ def main() -> None:
             page.screenshot(path=str(screenshots_directory / "home-wide.png"), full_page=True)
             page.locator("#source-url").fill("https://example.com/watch?v=GmBG-26_Izw")
             page.locator(".search-form button").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator(".failure-notice").wait_for()
             assert_single_surface(page)
             page.screenshot(path=str(screenshots_directory / "error-notice-wide.png"), full_page=True)
             page.locator(".failure-notice a").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator('.site-nav a[href="/archive"]').click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.get_by_text("Nothing saved yet").wait_for()
             assert_single_surface(page)
             page.screenshot(path=str(screenshots_directory / "archive-empty-wide.png"), full_page=True)
             page.locator('.site-nav a[href="/settings"]').click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             assert_single_surface(page)
             page.screenshot(path=str(screenshots_directory / "settings-wide.png"), full_page=True)
             page.locator('.site-nav a[href="/"]').click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             for width, height in ((280, 940), (320, 940), (430, 1100), (844, 390), (1365, 768), (1600, 1000), (3440, 1100)):
                 assert_no_horizontal_overflow(page, width, height)
                 if width in (280, 1600, 3440):
@@ -157,6 +162,7 @@ def main() -> None:
 
             page.locator("#source-url").fill("https://www.youtube.com/playlist?list=PLVANSOs5ny50")
             page.locator(".search-form button[type=submit]").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator(".video-row").first.wait_for(timeout=15_000)
             page.locator("h2").filter(has_text="Lectures on evidence and uncertainty").wait_for()
             assert page.locator(".video-row").count() == 3
@@ -169,22 +175,29 @@ def main() -> None:
                     page.screenshot(path=str(screenshots_directory / f"results-{width}.png"), full_page=True)
 
             page.locator("button[name=sort_choice][value=author]").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             titles = page.locator(".video-title").all_text_contents()
             assert titles[0].startswith("The first question") and titles[1].startswith("A long view")
             assert page.locator(".sort-choice.is-current").inner_text() == "Author"
-            assert page.locator(".video-check input").first.bounding_box()["width"] == 66
+            assert page.locator(".video-check input").first.bounding_box()["width"] == 33
             page.locator("input[name=filter_text]").fill("record")
             page.locator("button[name=list_action][value=filter]").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             assert page.locator(".video-row").count() == 0
             page.locator("input[name=filter_text]").fill("")
             page.locator("button[name=list_action][value=filter]").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator("button[name=list_action][value=select_none]").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             assert page.locator('input[name="video_ids"]:checked').count() == 0
             page.locator("button[name=list_action][value=select_all]").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             assert page.locator('input[name="video_ids"]:checked').count() == 3
             page.locator("button[name=list_action][value=select_all]").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             assert page.locator('input[name="video_ids"]:checked').count() == 3
             page.locator("button[name=list_action][value=summarize]").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.get_by_text("BATCH COMPLETE", exact=True).wait_for(timeout=15_000)
             page.locator(".summary-prose").first.wait_for(state="attached")
             assert page.locator(".summary-card").count() == 3
@@ -206,24 +219,28 @@ def main() -> None:
 
             page.locator("#summary-filter").fill("Video 3")
             page.locator(".summary-filter button").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             assert page.locator(".summary-card").count() == 1
             assert page.locator(".summary-title").inner_text() == "Video 3"
             page.locator("#summary-filter").fill("no matching title")
             page.locator(".summary-filter button").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             assert page.locator(".summary-card").count() == 0
             page.get_by_text("No video summaries match this search.").wait_for()
             page.locator(".summary-filter a").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             assert page.locator(".summary-card").count() == 3
 
             # Test the progress page's active CSS animation while a fake answer
             # is held in the background, then release it by waiting for completion.
             page.locator(".summary-card").first.locator("summary").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator('.chat-form input[name="question"]').first.fill("How certain is that conclusion?")
             page.locator(".chat-form button[type=submit]").first.click()
             page.get_by_text("Answering your question.").wait_for(timeout=5_000)
-            assert page.locator('meta[http-equiv="refresh"]').count() == 1
-            animation_name = page.locator(".progress-page").evaluate("el => getComputedStyle(el, '::after').animationName")
-            animation_duration = page.locator(".progress-page").evaluate("el => getComputedStyle(el, '::after').animationDuration")
+            assert page.locator('meta[http-equiv="refresh"]').count() == 0
+            animation_name = page.locator(".answer-dock .progress-page").evaluate("el => getComputedStyle(el, '::after').animationName")
+            animation_duration = page.locator(".answer-dock .progress-page").evaluate("el => getComputedStyle(el, '::after').animationDuration")
             assert animation_name == "reading-line"
             assert animation_duration == "1.8s"
             page.screenshot(path=str(screenshots_directory / "chat-loading.png"), full_page=True)
@@ -234,47 +251,60 @@ def main() -> None:
             page.set_viewport_size({"width": 320, "height": 940})
             assert page.locator(".sidebar").count() == 0
             page.locator('.site-nav a[href="/archive"]').click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator("h1").filter(has_text="Archive").wait_for()
             assert "pageone.json" in page.locator(".file-caption").inner_text()
             assert page.get_by_text("Lectures on evidence and uncertainty").count() >= 1
             page.screenshot(path=str(screenshots_directory / "archive-mobile.png"), full_page=True)
             page.locator("#archive-search").fill("no matching source")
             page.locator(".archive-search button").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.get_by_text("Nothing saved yet").wait_for()
             page.locator("#archive-search").fill("")
             page.locator(".archive-search button").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator("#archive-search").fill("first question")
             page.locator(".archive-search button").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             assert page.locator(".archive-row").count() == 1
             page.locator("#archive-search").fill("")
             page.locator(".archive-search button").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator(".archive-row").first.click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator(".archive-summary").first.locator("summary").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator(".summary-prose").first.wait_for()
             page.get_by_text("How certain is that conclusion?").wait_for()
             page.locator("#archive-filter").fill("Video 3")
             page.locator(".summary-filter button").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             assert page.locator(".archive-summary").count() == 1
             page.locator(".summary-filter a").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             assert page.locator(".archive-summary").count() == 3
             page.screenshot(path=str(screenshots_directory / "archive-detail-mobile.png"), full_page=True)
             assert_no_horizontal_overflow(page, 320, 940)
             page.locator('.site-nav a[href="/settings"]').click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator("h1").filter(has_text="Settings").wait_for()
             assert "pageone.log" in page.locator(".file-caption").inner_text()
             initial_font_size = float(page.locator("body").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
             page.locator('select[name="interface_scale"]').select_option("extra_large")
             page.locator("button[type=submit]").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator("body.scale-extra_large").wait_for()
             large_font_size = float(page.locator("body").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
             assert large_font_size > initial_font_size
             page.locator('select[name="interface_scale"]').select_option("compact")
             page.locator("button[type=submit]").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator("body.scale-compact").wait_for()
             compact_font_size = float(page.locator("body").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
             assert compact_font_size < initial_font_size
             page.locator("#summary-preferences").fill("Keep uncertainty visible.")
             page.locator("button[type=submit]").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator('.settings-feedback[title="Summary preferences saved."]').wait_for()
             page.screenshot(path=str(screenshots_directory / "settings-mobile.png"), full_page=True)
             assert_no_horizontal_overflow(page, 320, 940)
@@ -282,31 +312,41 @@ def main() -> None:
             page.screenshot(path=str(screenshots_directory / "settings-ultrawide.png"), full_page=True)
             assert_no_horizontal_overflow(page, 3440, 1100)
             page.locator('.site-nav a[href="/archive"]').click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.screenshot(path=str(screenshots_directory / "archive-ultrawide.png"), full_page=True)
             page.set_viewport_size({"width": 1600, "height": 1000})
             page.screenshot(path=str(screenshots_directory / "archive-1600.png"), full_page=True)
             page.locator(".archive-row").first.click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.screenshot(path=str(screenshots_directory / "archive-detail-ultrawide.png"), full_page=True)
             assert_no_horizontal_overflow(page, 3440, 1100)
             page.set_viewport_size({"width": 320, "height": 940})
             page.locator('.site-nav a[href="/archive"]').click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator('.create-list-form input[name="title"]').fill("Reading desk")
             page.locator('.create-list-form button').click()
-            custom_list_id = page.url.rsplit("/", 1)[-1]
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
+            page.locator('.delete-list-form').wait_for()
+            custom_list_id = page.locator('.delete-list-form').get_attribute('action').split('/')[-2]
             page.get_by_text("Reading desk").wait_for()
             page.locator('.site-nav a[href="/"]').click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator('#target-list').select_option(custom_list_id)
             page.locator('#source-url').fill("https://www.youtube.com/watch?v=aBcdEF_1234")
             page.locator('.search-form button').click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator('.video-row').first.wait_for(timeout=15_000)
             page.locator('.site-nav a[href="/archive"]').click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator('.archive-row').filter(has_text="Reading desk").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator('.summary-title').filter(has_text="A long view of research and careful uncertainty").wait_for()
             assert page.locator('.archive-summary').count() == 1
             page.screenshot(path=str(screenshots_directory / "custom-list-mobile.png"), full_page=True)
             assert_no_horizontal_overflow(page, 320, 940)
             page.locator('.delete-list-form input[name="confirm"]').check()
             page.locator('.delete-list-form button').click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.get_by_text("Reading desk").wait_for(state="detached")
 
             def offline_topic_function(titles: list[str], usage_callback=None) -> list[str]:
@@ -315,8 +355,10 @@ def main() -> None:
 
             app.config["TOPIC_FUNCTION"] = offline_topic_function
             page.locator('.site-nav a[href="/"]').click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator("#source-url").fill("https://www.youtube.com/playlist?list=PLVANSOs5ny50")
             page.locator(".search-form button").click()
+            page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator(".failure-notice").wait_for(timeout=15_000)
             assert "Connection unavailable" in page.locator(".failure-notice").inner_text()
             page.screenshot(path=str(screenshots_directory / "offline-api-notice-mobile.png"), full_page=True)

@@ -12,8 +12,9 @@
   {% else %}
   <form method="post" action="{{ url_for('source_results', source_key=source.source_key) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="page" value="{{ page_number }}">
     <div class="list-toolbar">
-      <div><span class="muted">Select videos to summarize</span></div>
+      <div><span class="muted">{{ selected_count }} selected · {{ matching_count }} matching titles</span></div>
       <div class="list-controls">
         <button class="text-button" type="submit" name="list_action" value="select_all">Select all</button>
         <button class="text-button" type="submit" name="list_action" value="select_none">None</button>
@@ -30,12 +31,19 @@
       {% set saved = summaries.get(video.id) %}
       <li class="video-row">
         <span class="video-check"><input type="checkbox" name="video_ids" value="{{ video.id }}" {% if video.id in selected_ids %}checked{% endif %}><span class="custom-check"></span></span>
-        <span class="video-index">{{ "%02d"|format(loop.index) }}</span>
+        <span class="video-index">{{ video.display_index }}</span>
         <div class="video-copy"><a class="video-title" href="{{ video.url }}" target="_blank" rel="noopener noreferrer">{{ video.title }}</a><div class="video-meta"><span>{{ video.published_at }}</span><span>{{ video.author }}</span><span>{{ video.topic or "Other" }}</span></div></div>
         <span class="video-state">{{ "SAVED" if saved else "NEW" }}</span>
       </li>
       {% endfor %}
     </ol>
+    {% if page_count > 1 %}
+    <div class="pagination">
+      <button class="text-button" type="submit" name="page_choice" value="{{ page_number - 1 }}" {% if page_number == 1 %}disabled{% endif %}>Previous</button>
+      <span class="muted">Page {{ page_number }} of {{ page_count }} · selections carry across pages</span>
+      <button class="text-button" type="submit" name="page_choice" value="{{ page_number + 1 }}" {% if page_number == page_count %}disabled{% endif %}>Next</button>
+    </div>
+    {% endif %}
     <div class="batch-actions"><div class="refresh-choice"><input type="checkbox" name="refresh" value="yes"><span>Re-summarize selected videos</span></div><button class="button button-dark" type="submit" name="list_action" value="summarize">Summarize selected ></button></div>
   </form>
   {% endif %}

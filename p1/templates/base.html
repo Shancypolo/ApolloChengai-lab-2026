@@ -8,6 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/pageone.css') }}">
   <script src="{{ url_for('static', filename='js/reading_position.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/local_requests.js') }}" defer></script>
 </head>
 <body class="scale-{{ display_settings.interface_scale }} width-{{ display_settings.reading_width }}">
   <div class="app-shell">
@@ -22,6 +23,10 @@
     <main class="main-content">
       {% block content %}{% endblock %}
     </main>
+    <aside class="answer-dock" id="answer-dock">
+      <button class="answer-dock-close" type="button">Close</button>
+      <div class="answer-dock-content"></div>
+    </aside>
   </div>
   <aside class="usage-meter" title="Cached tokens are included in input; thinking tokens are included in output. Cost uses reported usage and current model token rates.">
     <span>Session tokens: {{ usage.total_tokens_label }} total · {{ usage.input_tokens_label }} input ({{ usage.cached_tokens_label }} cached, {{ usage.cache_write_tokens_label }} cache writes) · {{ usage.output_tokens_label }} output ({{ usage.reasoning_tokens_label }} thinking)</span>

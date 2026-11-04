@@ -3,6 +3,7 @@
 {% block content %}
 <section class="home-hero">
   <h1 class="hero-logo">P. 1</h1>
+  <p class="home-caption">Summarize a YouTube video or playlist.</p>
   <form class="home-form" method="post" action="{{ url_for('inspect_source') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="search-form"><input id="source-url" name="source_url" type="url" placeholder="Paste YouTube URL" required>
