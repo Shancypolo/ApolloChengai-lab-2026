@@ -253,7 +253,7 @@ def main() -> None:
             page.locator('.site-nav a[href="/archive"]').click()
             page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator("h1").filter(has_text="Archive").wait_for()
-            assert "pageone.json" in page.locator(".file-caption").inner_text()
+            assert "userdata.json" in page.locator(".file-caption").inner_text()
             assert page.get_by_text("Lectures on evidence and uncertainty").count() >= 1
             page.screenshot(path=str(screenshots_directory / "archive-mobile.png"), full_page=True)
             page.locator("#archive-search").fill("no matching source")
@@ -288,7 +288,7 @@ def main() -> None:
             page.locator('.site-nav a[href="/settings"]').click()
             page.wait_for_function("() => !document.querySelector('.local-request-status')", timeout=15000)
             page.locator("h1").filter(has_text="Settings").wait_for()
-            assert "pageone.log" in page.locator(".file-caption").inner_text()
+            assert "error.log" in page.locator(".file-caption").inner_text()
             initial_font_size = float(page.locator("body").evaluate("el => parseFloat(getComputedStyle(el).fontSize)"))
             page.locator('select[name="interface_scale"]').select_option("extra_large")
             page.locator("button[type=submit]").click()
@@ -362,7 +362,7 @@ def main() -> None:
             page.locator(".failure-notice").wait_for(timeout=15_000)
             assert "Connection unavailable" in page.locator(".failure-notice").inner_text()
             page.screenshot(path=str(screenshots_directory / "offline-api-notice-mobile.png"), full_page=True)
-            assert "ConnectionError" in (Path(temporary_directory.name) / "pageone.log").read_text(encoding="utf-8")
+            assert "ConnectionError" in (Path(temporary_directory.name) / "error.log").read_text(encoding="utf-8")
             assert browser_errors == [], browser_errors
             browser.close()
         print(f"Browser checks passed. Screenshots: {screenshots_directory}")

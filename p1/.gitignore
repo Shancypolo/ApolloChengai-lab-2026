@@ -4,3 +4,4 @@ __pycache__/
 instance/pageone.json
 instance/pageone.log*
 instance/pageone-*.tmp
+user data/

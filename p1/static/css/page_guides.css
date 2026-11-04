@@ -1,0 +1,270 @@
+/* Small labels and rules make each page's next step easy to spot. */
+.icon-emoji {
+  font-family: var(--ui);
+  font-size: .82em;
+  vertical-align: .04em;
+}
+
+.youtube-help {
+  margin: 0;
+  color: var(--red);
+  font: 13px/1.4 var(--ui);
+  text-underline-offset: .2em;
+}
+
+.source-label,
+.guide-heading {
+  display: block;
+  color: var(--ink);
+  font: 600 13px/1.4 var(--ui);
+}
+
+.source-label {
+  margin: 0 0 3px;
+}
+
+.home-options {
+  gap: 8px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.home-options .save-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.home-options select {
+  min-width: min(100%, 230px);
+}
+
+.replacement-option {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 12px;
+  padding: 10px 0 0;
+}
+
+.replacement-option p {
+  margin: 0;
+  color: var(--muted);
+  font: 11px/1.4 var(--ui);
+}
+
+.home-hero .workflow-guide {
+  width: min(100%, 1100px);
+  margin: 6px auto 0;
+}
+
+.home-hero {
+  gap: 24px;
+  min-height: calc(100dvh - 155px);
+  padding: 42px 0;
+}
+
+.hero-logo {
+  font-size: clamp(88px, 10vw, 150px);
+}
+
+.home-caption {
+  margin: 0;
+  max-width: 50ch;
+  text-align: center;
+}
+
+.save-hint {
+  margin: 4px 0 12px;
+  color: var(--muted);
+  font: 12px/1.4 var(--ui);
+}
+
+.archive-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
+  gap: clamp(28px, 5vw, 82px);
+  align-items: start;
+  margin: 0 0 58px;
+}
+
+.archive-tools .archive-search,
+.archive-tools .create-list-form {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.archive-search-controls,
+.create-list-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 58px;
+  margin-top: 5px;
+  border-bottom: 1px solid var(--ink);
+}
+
+.archive-tools .archive-search input,
+.archive-tools .create-list-form input {
+  min-width: 0;
+  width: 100%;
+  height: 52px;
+}
+
+.archive-tools .create-list-form input {
+  flex: 1;
+  font: calc(17px * var(--font-scale)) var(--text);
+}
+
+.archive-tools .archive-search button,
+.archive-tools .create-list-form button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.archive-group {
+  margin: 42px 0 58px;
+}
+
+.archive-group h2 {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.archive-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.archive-row:nth-child(n + 2) {
+  padding-left: 0;
+}
+
+.archive-item {
+  min-width: 0;
+}
+
+.archive-open-hint {
+  flex: none;
+  color: var(--red);
+  font: 12px/1.4 var(--ui);
+  white-space: nowrap;
+}
+
+.archive-file-caption,
+.settings-file-caption {
+  margin: 36px 0 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+.settings-panel form {
+  row-gap: 0;
+}
+
+.preferences-heading {
+  grid-column: 1;
+  grid-row: 1;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.preferences-heading .field-title {
+  margin: 0;
+}
+
+.preferences-heading p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font: 12px/1.45 var(--ui);
+}
+
+.settings-panel textarea {
+  grid-row: 2;
+  border-top: 0;
+}
+
+.general-settings {
+  gap: 20px 24px;
+}
+
+.general-settings h2 {
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.settings-actions .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 19px/1.4 var(--display);
+}
+
+@media (max-width: 760px) {
+  .youtube-help {
+    margin: 0;
+  }
+
+  .archive-tools {
+    grid-template-columns: 1fr;
+    gap: 30px;
+    margin-bottom: 44px;
+  }
+
+  .archive-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .settings-panel form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .preferences-heading,
+  .settings-panel textarea,
+  .general-settings {
+    grid-column: 1;
+  }
+
+  .preferences-heading {
+    grid-row: 1;
+  }
+
+  .settings-panel textarea {
+    grid-row: 2;
+  }
+
+  .general-settings {
+    grid-row: 3;
+    margin-top: 34px;
+  }
+
+  .settings-actions {
+    grid-row: 4;
+  }
+}
+
+@media (max-width: 480px) {
+  .archive-search-controls,
+  .create-list-controls {
+    gap: 10px;
+  }
+
+  .archive-tools .archive-search button,
+  .archive-tools .create-list-form button {
+    font-size: 12px;
+  }
+
+  .general-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .general-settings h2,
+  .general-settings label:last-child {
+    grid-column: 1;
+  }
+}

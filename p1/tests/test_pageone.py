@@ -106,7 +106,7 @@ class PageOneCoreTests(unittest.TestCase):
     def test_version_one_archive_upgrades_without_erasing_saved_bytes(self):
         """Read old sources into editable lists and write version 2 later."""
         with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "pageone.json"
+            path = Path(folder) / "userdata.json"
             old = {
                 "schema_version": 1, "summary_preferences": "Keep evidence.",
                 "sources": {"playlist:PLVANSOs5ny50": make_video_source("playlist", "PLVANSOs5ny50")},
@@ -130,7 +130,7 @@ class PageOneCoreTests(unittest.TestCase):
     def test_existing_archive_gets_new_display_defaults_on_read(self):
         """Read older version-2 settings without rewriting saved bytes."""
         with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "pageone.json"
+            path = Path(folder) / "userdata.json"
             archive = ArchiveStore(path).read()
             archive["settings"].pop("interface_scale")
             archive["settings"].pop("reading_width")
@@ -169,7 +169,7 @@ class PageOneCoreTests(unittest.TestCase):
     def test_archive_persists_preferences_and_preserves_malformed_file(self):
         """Write Unicode preferences atomically and retain malformed bytes."""
         with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "pageone.json"
+            path = Path(folder) / "userdata.json"
             store = ArchiveStore(path)
             self.assertEqual(store.read()["summary_preferences"], DEFAULT_PREFERENCES)
             store.update(lambda archive: archive.__setitem__("summary_preferences", "Cite café evidence."))
@@ -193,7 +193,7 @@ class PageOneCoreTests(unittest.TestCase):
 
     def test_missing_source_package_remains_a_setup_failure(self):
         """Preserve the missing-package cause during source extraction."""
-        with patch("youtube_source._youtube_dl", side_effect=SourceError("Install the app dependencies to access YouTube.")):
+        with patch("youtube_source._youtube_dl", side_effect=SourceError("Install the app dependencies to access YouTube.")), patch.dict(sys.modules, {"pytubefix": None}):
             with self.assertRaisesRegex(SourceError, "Install"):
                 fetch_source("video", "GmBG-26_Izw")
 
@@ -211,7 +211,7 @@ class PageOneCoreTests(unittest.TestCase):
             self.assertEqual(response.status_code, 500)
             self.assertIn(b'class="failure-notice"', response.data)
             self.assertNotIn(b"private example payload", response.data)
-            log_text = (Path(folder) / "pageone.log").read_text(encoding="utf-8")
+            log_text = (Path(folder) / "error.log").read_text(encoding="utf-8")
             self.assertIn("RuntimeError", log_text)
             self.assertNotIn("private example payload", log_text)
 
@@ -589,7 +589,7 @@ class PageOneRouteTests(unittest.TestCase):
         all_page = self.client.post("/sources/playlist:PLVANSOs5ny50", data={
             "csrf_token": self.csrf, "list_action": "select_all",
         })
-        self.assertEqual(all_page.data.count(b"checked"), 3)
+        self.assertEqual(all_page.data.count(b" checked>"), 3)
 
     def test_cached_summaries_are_not_repeated_and_transcripts_are_not_saved(self):
         """Reuse saved video notes and never write transcript text to disk."""
@@ -599,8 +599,8 @@ class PageOneRouteTests(unittest.TestCase):
         self.submit_summary()
         self.assertEqual(len(self.transcript_calls), 1)
         self.assertEqual(len(self.summary_calls), 1)
-        archive_text = (Path(self.folder.name) / "pageone.json").read_text(encoding="utf-8")
-        log_text = (Path(self.folder.name) / "pageone.log").read_text(encoding="utf-8")
+        archive_text = (Path(self.folder.name) / "userdata.json").read_text(encoding="utf-8")
+        log_text = (Path(self.folder.name) / "error.log").read_text(encoding="utf-8")
         self.assertNotIn("Secret transcript text", archive_text)
         self.assertNotIn("Secret transcript text", log_text)
         self.assertIn("A short source-grounded summary", archive_text)
@@ -668,8 +668,8 @@ class PageOneRouteTests(unittest.TestCase):
 
     def test_archive_and_settings_show_data_file_paths(self):
         """Show the configured archive and log file names on their pages."""
-        self.assertIn(str(Path(self.folder.name) / "pageone.json").encode(), self.client.get("/archive").data)
-        self.assertIn(str(Path(self.folder.name) / "pageone.log").encode(), self.client.get("/settings").data)
+        self.assertIn(str(Path(self.folder.name) / "userdata.json").encode(), self.client.get("/archive").data)
+        self.assertIn(str(Path(self.folder.name) / "error.log").encode(), self.client.get("/settings").data)
 
     def test_custom_lists_copy_move_and_delete_without_duplication(self):
         """Change memberships while keeping one canonical summary and chat."""
@@ -879,7 +879,7 @@ class NestingDepthTests(unittest.TestCase):
             return max([current_depth, *(walk(child, current_depth) for child in ast.iter_child_nodes(node))])
 
         depths = {}
-        runtime_files = ("app.py", "run.py", "archive_storage.py", "youtube_source.py", "ai_summaries.py", "usage_accounting.py")
+        runtime_files = ("app.py", "run.py", "data_paths.py", "archive_storage.py", "youtube_source.py", "ai_summaries.py", "usage_accounting.py")
         for file_name in runtime_files:
             tree = ast.parse((APP_DIRECTORY / file_name).read_text(encoding="utf-8"))
             depths[file_name] = walk(tree)

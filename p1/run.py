@@ -10,10 +10,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from data_paths import LOG_FILE_NAME, PathMigrationError, default_data_directory, migrate_data_files
+
 
 APP_DIRECTORY = Path(__file__).resolve().parent
 DEFAULT_PORT = 5000
-REQUIRED_MODULES = ("flask", "openai", "yt_dlp")
+REQUIRED_MODULES = ("flask", "openai")
+EXTRACTOR_MODULES = ("yt_dlp", "pytubefix")
 STARTUP_FILES = {
     "/": (APP_DIRECTORY / "templates" / "startup_error.html", "text/html; charset=utf-8"),
     "/static/css/pageone.css": (APP_DIRECTORY / "static" / "css" / "pageone.css", "text/css; charset=utf-8"),
@@ -47,7 +50,10 @@ class StartupNoticeHandler(BaseHTTPRequestHandler):
 
 def missing_modules() -> list[str]:
     """List packages needed for the supported launch command."""
-    return [module for module in REQUIRED_MODULES if importlib.util.find_spec(module) is None]
+    missing = [module for module in REQUIRED_MODULES if importlib.util.find_spec(module) is None]
+    if not any(importlib.util.find_spec(module) is not None for module in EXTRACTOR_MODULES):
+        missing.append("yt_dlp or pytubefix")
+    return missing
 
 
 def startup_logger() -> logging.Logger:
@@ -59,14 +65,24 @@ def startup_logger() -> logging.Logger:
     terminal = logging.StreamHandler(sys.stderr)
     terminal.setFormatter(formatter)
     logger.addHandler(terminal)
-    data_directory = Path(os.environ.get("PAGEONE_DATA_DIR", str(APP_DIRECTORY / "instance"))).expanduser()
+    data_directory = default_data_directory(APP_DIRECTORY)
+    migration_error: str | None = None
+    try:
+        legacy_directory = None if "PAGEONE_DATA_DIR" in os.environ else APP_DIRECTORY / "instance"
+        migrate_data_files(data_directory, legacy_directory)
+    except PathMigrationError as error:
+        migration_error = f"Data migration stopped safely: {error}"
+    except Exception as error:
+        migration_error = f"Data migration unavailable ({type(error).__name__})"
     try:
         data_directory.mkdir(parents=True, exist_ok=True)
-        log = RotatingFileHandler(data_directory / "pageone.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8")
+        log = RotatingFileHandler(data_directory / LOG_FILE_NAME, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
         log.setFormatter(formatter)
         logger.addHandler(log)
     except OSError as error:
         logger.error("Startup log file unavailable (%s)", type(error).__name__)
+    if migration_error:
+        logger.error("%s", migration_error)
     return logger
 
 
@@ -106,6 +122,9 @@ def main() -> None:
         return
     try:
         from app import app
+    except PathMigrationError as error:
+        show_startup_notice(str(error))
+        return
     except Exception as error:
         show_startup_notice(f"App initialization failed ({type(error).__name__}).")
         return

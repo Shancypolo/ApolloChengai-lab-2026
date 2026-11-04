@@ -11,6 +11,7 @@ Some features below probably wont make it to the final product.
 
 - Local Python Flask app with Jinja2 server-rendered pages and locally served CSS. Two local JavaScript helpers provide same-origin HTML swaps and visual scroll stability; Python still owns data, AI, routes, and HTML rendering.
 - Main-page forms and ordinary same-origin content links update in place and poll job progress; the Home, Archive, and Settings header links keep full-page navigation. The browser request helper rejects cross-origin destinations and redirects.
+- Home presents a labeled three-step workflow. Navigation icons use a locally bundled engraved black-and-white sprite and remain paired with text; Newsreader is bundled locally under its OFL notice. Stronger rules and grouped tasks distinguish page sections, with supplemental styling for secondary pages.
 - A horizontal Home, Archive, and Settings navigation; a fixed session token and USD-cost meter sits at the bottom left.
 - A text-only `P. 1` masthead, single white surface, generous open space, and horizontal editorial rules; Home, Archive, and Settings keep visible copy minimal.
 - Viewport-scaled masthead and search, wide archive and result lists, and readable notes on narrow screens. Settings use two columns on desktop and stack below 900 pixels; Archive and Settings include brief purpose captions.
@@ -23,7 +24,7 @@ Some features below probably wont make it to the final product.
 - Collapsed summaries in batch results and archive detail can be searched by title, topic, or summary text through Python routes.
 - Summary and follow-up prompts use English. Follow-ups show loading progress, fetch captions, and store only the question and answer. Follow-up results appear in a shared answer dock while the current list remains visible; a failed answer can be retried with its question retained.
 - Failed source lookup offers an in-place retry using the validated URL, source type, target list, and replacement setting held in the in-memory job. Failed summary rows can be retried one video at a time through `/retry-video/<source_key>/<video_id>`.
-- API calls have up to four attempts total for transient connection, timeout, rate-limit, and server failures, with 0.5/1/2-second backoff. Authentication errors, other client errors, and malformed model responses are not retried. The OpenAI SDK automatic retry is disabled; each app attempt records its own usage state and safe retry log entry.
+- Each bounded model request makes one OpenAI attempt with SDK automatic retries disabled. Failures are logged by exception class and recorded once in usage accounting; users may explicitly retry a failed answer or summary.
 - Local JSON archive stores source rows, title topics, summaries, chat turns, timestamps, and summary preferences. Archive and Settings show the archive and error-log file paths.
 - Archive groups playlist, custom-list, and single-video summaries. Lists can be created or deleted; videos can be copied or moved between lists; a saved video summary can be deleted separately.
 - Home can add a video link or one-video playlist to an existing list; larger playlists get their own list. Repeat playlist checks add new IDs and summarize them by default, while replacing existing text requires the Home approval checkbox.
@@ -35,7 +36,7 @@ Some features below probably wont make it to the final product.
 ## Limits
 
 - English captions are required. Caption retrieval or YouTube extraction may fail due to availability or service changes.
-- `yt-dlp` listing is not the official YouTube Data API; review the technical handoff for source and terms considerations.
+- `yt-dlp` is tried first for public metadata and English captions; `pytubefix` is a fallback. Neither is the official YouTube Data API; review the technical handoff for source and terms considerations.
 - Date and author metadata may be `Unknown`.
 - Cost uses documented GPT-6 Luna input, cached-input, 30-minute cache-write, 12-hour cache-write, and output rates. Missing or invalid cache-write breakdowns make an attempt unpriced; displayed totals round to eight decimal places.
 - Local in-page requests use same-origin HTML from Flask; YouTube extraction and OpenAI calls remain server-side. The JavaScript transport does not update the address bar or browser history for in-page swaps.

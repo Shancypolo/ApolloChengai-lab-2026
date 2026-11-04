@@ -1,21 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Archive — PageOne{% endblock %}
 {% block content %}
-<section class="page-heading editorial-heading"><h1>Archive</h1><p class="page-caption">Find saved playlist summaries, lists, and videos.</p></section>
-<form class="archive-search" method="get" action="{{ url_for('archive_index') }}">
-  <input id="archive-search" type="search" name="q" value="{{ query }}" maxlength="200" placeholder="Search archive">
-  <button type="submit">Search</button>
-</form>
-<p class="file-caption">Archive file: {{ archive_file }}</p>
-<form class="create-list-form" method="post" action="{{ url_for('create_summary_list') }}">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <input name="title" maxlength="120" placeholder="New summary list" required>
-  <button class="text-button" type="submit">Create list →</button>
-</form>
+<section class="page-heading editorial-heading"><h1>Archive</h1><p class="page-caption">Your saved playlist summaries, lists, and videos, all in one place.</p></section>
+<div class="archive-tools">
+  <form class="archive-search" method="get" action="{{ url_for('archive_index') }}">
+    <label class="guide-heading" for="archive-search"><span class="icon-emoji">🔎</span> Find saved summaries</label>
+    <div class="archive-search-controls"><input id="archive-search" type="search" name="q" value="{{ query }}" maxlength="200" placeholder="Search by title">
+    <button type="submit">Search →</button></div>
+  </form>
+  <form class="create-list-form" method="post" action="{{ url_for('create_summary_list') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="guide-heading" for="new-list-title"><span class="icon-emoji">📂</span> Create a summary list</label>
+    <div class="create-list-controls"><input id="new-list-title" name="title" maxlength="120" placeholder="Name your list" required>
+    <button class="text-button" type="submit">Create list →</button></div>
+  </form>
+</div>
 {% if not groups.playlists and not groups.custom and not groups.single %}<div class="empty-state"><h2>Nothing saved yet</h2></div>{% endif %}
-{% for group_title, rows in [('Playlist summaries', groups.playlists), ('Summary lists', groups.custom), ('Single video summaries', groups.single)] %}
-{% if rows %}<section class="archive-group"><h2>{{ group_title }}</h2><div class="archive-list">
-  {% for source in rows %}<a class="archive-row" href="{{ url_for('archive_detail', source_key=source.source_key) }}"><span class="archive-item"><strong>{{ source.title }}</strong></span><span class="archive-arrow"></span></a>{% endfor %}
+{% for group_title, group_icon, rows in [('Playlist summaries', '▶️', groups.playlists), ('Custom lists', '📂', groups.custom), ('Single video summaries', '🎬', groups.single)] %}
+{% if rows %}<section class="archive-group"><h2><span class="icon-emoji">{{ group_icon }}</span> {{ group_title }}</h2><div class="archive-list">
+  {% for source in rows %}<a class="archive-row" href="{{ url_for('archive_detail', source_key=source.source_key) }}"><span class="archive-item"><strong>{{ source.title }}</strong></span><span class="archive-open-hint">Open list →</span></a>{% endfor %}
 </div></section>{% endif %}
 {% endfor %}
+<p class="file-caption archive-file-caption">Archive file: {{ archive_file }}</p>
 {% endblock %}
