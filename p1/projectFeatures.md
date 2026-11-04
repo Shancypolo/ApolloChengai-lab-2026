@@ -7,6 +7,8 @@ Some features below probably wont make it to the final product.
 5. support multiple playlists
 6. automatic fetch new videos added to playlist and summarize on startup
 
+come up with an intricate, graceful, and encompassing solution to subscribing to playlists, users may input a playlist to subscribe to, auto fetch new videos of subscribed playlists on app startup, notify user of new videos, allow user to video titles of all new videos and choose ones to summarize, and present summaries gracefully. 
+
 ## PageOne
 
 - Local Python Flask app with Jinja2 server-rendered pages and locally served CSS. Two local JavaScript helpers provide same-origin HTML swaps and visual scroll stability; Python still owns data, AI, routes, and HTML rendering.
