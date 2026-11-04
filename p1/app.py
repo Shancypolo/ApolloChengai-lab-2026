@@ -22,6 +22,9 @@ from archive_storage import (
     ArchiveStore, DEFAULT_PREFERENCES, DEFAULT_SETTINGS,
     INTERFACE_SCALE_OPTIONS, READING_WIDTH_OPTIONS,
 )
+from data_paths import (
+    ARCHIVE_FILE_NAME, LOG_FILE_NAME, default_data_directory, migrate_data_files,
+)
 from ai_summaries import (
     SummaryError, answer_video_question, label_video_titles,
     split_summary_batches, summarize_video_batch,
@@ -36,10 +39,7 @@ from youtube_source import (
 
 
 APP_NAME = "PageOne"
-DEFAULT_DATA_DIRECTORY = Path(
-    os.environ.get("PAGEONE_DATA_DIR", str(Path(__file__).parent / "instance"))
-).expanduser()
-LOG_FILE_NAME = "pageone.log"
+DEFAULT_DATA_DIRECTORY = default_data_directory(Path(__file__).resolve().parent)
 MAX_PREFERENCE_LENGTH = 2_000
 MAX_QUESTION_LENGTH = 1_000
 MAX_FILTER_LENGTH = 200
@@ -712,10 +712,14 @@ def create_app(
 ) -> Flask:
     """Build a testable local app with replaceable YouTube and AI services."""
     app = Flask(__name__)
+    configured_directory = Path(data_directory).expanduser() if data_directory is not None else DEFAULT_DATA_DIRECTORY
+    is_explicit_directory = data_directory is not None or "PAGEONE_DATA_DIR" in os.environ
+    legacy_directory = None if is_explicit_directory else Path(__file__).resolve().parent / "instance"
+    migration_messages = migrate_data_files(configured_directory, legacy_directory)
     app.config.update(
         SECRET_KEY=secrets.token_hex(32),
-        DATA_DIRECTORY=Path(data_directory or DEFAULT_DATA_DIRECTORY),
-        STORE=ArchiveStore(Path(data_directory or DEFAULT_DATA_DIRECTORY) / "pageone.json"),
+        DATA_DIRECTORY=configured_directory,
+        STORE=ArchiveStore(configured_directory / ARCHIVE_FILE_NAME),
         JOBS=JobRegistry(),
         USAGE=SessionUsageLedger(),
         SOURCE_FETCHER=source_fetcher,
@@ -729,6 +733,8 @@ def create_app(
         SESSION_COOKIE_SECURE=False,
     )
     configure_safe_logging(app)
+    for migration_message in migration_messages:
+        app.config["PAGEONE_LOGGER"].info(migration_message)
 
     @app.before_request
     def enforce_local_request() -> Any:

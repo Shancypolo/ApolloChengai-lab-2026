@@ -50,7 +50,7 @@ def main() -> None:
                     if attempt == 39:
                         raise
                     time.sleep(0.1)
-            log_text = (Path(folder) / "pageone.log").read_text(encoding="utf-8")
+            log_text = (Path(folder) / "error.log").read_text(encoding="utf-8")
             assert "Missing packages:" in log_text
         finally:
             process.terminate()

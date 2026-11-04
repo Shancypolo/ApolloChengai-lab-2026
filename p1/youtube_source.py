@@ -18,6 +18,7 @@ UNKNOWN_VALUE = "Unknown"
 YOUTUBE_LOGGER = logging.getLogger("pageone.yt_dlp")
 YOUTUBE_LOGGER.addHandler(logging.NullHandler())
 YOUTUBE_LOGGER.propagate = False
+APP_LOGGER = logging.getLogger("pageone")
 
 
 class SourceError(ValueError):
@@ -99,12 +100,12 @@ def fetch_source(source_kind: str, source_id: str) -> dict[str, Any]:
         try:
             with _youtube_dl(options) as downloader:
                 info = downloader.extract_info(canonical_video_url(source_id), download=False)
-        except SourceError:
-            raise
         except Exception as error:
-            raise SourceError("YouTube could not return that public video.") from error
-        if not isinstance(info, dict):
-            raise SourceError("YouTube returned no video information.")
+            _log_pytubefix_fallback(error)
+            return _fetch_video_with_pytubefix(source_id)
+        if not isinstance(info, dict) or not normalize_text(info.get("title")):
+            _log_pytubefix_fallback(None)
+            return _fetch_video_with_pytubefix(source_id)
         video = make_video_entry({**info, "id": source_id})
         return {
             "source_key": f"video:{source_id}",
@@ -121,18 +122,21 @@ def fetch_source(source_kind: str, source_id: str) -> dict[str, Any]:
     try:
         with _youtube_dl(options) as downloader:
             info = downloader.extract_info(canonical_playlist_url(source_id), download=False)
-    except SourceError:
-        raise
     except Exception as error:
-        raise SourceError("YouTube could not return that public playlist.") from error
-    if not isinstance(info, dict):
-        raise SourceError("YouTube returned no playlist information.")
-    entries = info.get("entries") or []
+        _log_pytubefix_fallback(error)
+        return _fetch_playlist_with_pytubefix(source_id)
+    entries = info.get("entries") if isinstance(info, dict) else None
+    if not isinstance(info, dict) or not isinstance(entries, list) or not entries:
+        _log_pytubefix_fallback(None)
+        return _fetch_playlist_with_pytubefix(source_id)
     videos = []
     for entry in entries:
         if not isinstance(entry, dict) or not VIDEO_ID_PATTERN.fullmatch(str(entry.get("id", ""))):
             continue
         videos.append(make_video_entry(entry))
+    if not videos:
+        _log_pytubefix_fallback(None)
+        return _fetch_playlist_with_pytubefix(source_id)
     return {
         "source_key": f"playlist:{source_id}",
         "kind": "playlist",
@@ -141,6 +145,79 @@ def fetch_source(source_kind: str, source_id: str) -> dict[str, Any]:
         "url": canonical_playlist_url(source_id),
         "videos": videos,
         "omitted_video_entries": len(entries) - len(videos),
+    }
+
+
+def _log_pytubefix_fallback(error: Exception | None) -> None:
+    """Record that fallback began without exposing provider error text."""
+    exception_name = type(error).__name__ if error is not None else "unusable response"
+    APP_LOGGER.warning("yt-dlp source fallback to pytubefix (%s)", exception_name)
+
+
+def _fetch_video_with_pytubefix(video_id: str) -> dict[str, Any]:
+    """Build one public video source record through pytubefix metadata."""
+    try:
+        from pytubefix import YouTube
+
+        source = YouTube(canonical_video_url(video_id))
+        if source.video_id != video_id:
+            raise ValueError("pytubefix returned a different video")
+        video = make_video_entry({
+            "id": source.video_id,
+            "title": source.title,
+            "uploader": source.author,
+            "upload_date": source.publish_date,
+        })
+    except Exception as error:
+        APP_LOGGER.warning("pytubefix source fallback failed (%s)", type(error).__name__)
+        if isinstance(error, ImportError):
+            raise SourceError("Install the app dependencies to access YouTube.") from None
+        raise SourceError("YouTube could not return that public video.") from None
+    return {
+        "source_key": f"video:{video_id}",
+        "kind": "video",
+        "id": video_id,
+        "title": video["title"],
+        "url": canonical_video_url(video_id),
+        "videos": [video],
+        "omitted_video_entries": 0,
+    }
+
+
+def _fetch_playlist_with_pytubefix(playlist_id: str) -> dict[str, Any]:
+    """List public playlist video metadata through pytubefix."""
+    try:
+        from pytubefix import Playlist
+
+        source = Playlist(canonical_playlist_url(playlist_id))
+        videos = []
+        omitted = 0
+        for item in source.videos:
+            try:
+                videos.append(make_video_entry({
+                    "id": item.video_id,
+                    "title": item.title,
+                    "uploader": item.author,
+                    "upload_date": item.publish_date,
+                }))
+            except Exception:
+                omitted += 1
+        if not videos:
+            raise ValueError("empty playlist metadata")
+        title = normalize_text(source.title) or "Untitled playlist"
+    except Exception as error:
+        APP_LOGGER.warning("pytubefix source fallback failed (%s)", type(error).__name__)
+        if isinstance(error, ImportError):
+            raise SourceError("Install the app dependencies to access YouTube.") from None
+        raise SourceError("YouTube could not return that public playlist.") from None
+    return {
+        "source_key": f"playlist:{playlist_id}",
+        "kind": "playlist",
+        "id": playlist_id,
+        "title": title,
+        "url": canonical_playlist_url(playlist_id),
+        "videos": videos,
+        "omitted_video_entries": omitted,
     }
 
 
@@ -203,10 +280,64 @@ def fetch_english_transcript(video_id: str) -> str:
             if not caption_files:
                 raise SourceError("No English captions were found for this video.")
             caption_data = json.loads(caption_files[0].read_text(encoding="utf-8"))
-    except SourceError:
-        raise
     except Exception as error:
-        raise SourceError("YouTube could not return English captions for this video.") from error
+        _log_pytubefix_fallback(error)
+        return _fetch_english_transcript_with_pytubefix(video_id)
     if not isinstance(caption_data, dict):
-        raise SourceError("The English captions were not in a readable format.")
-    return parse_caption_json(caption_data)
+        _log_pytubefix_fallback(None)
+        return _fetch_english_transcript_with_pytubefix(video_id)
+    try:
+        return parse_caption_json(caption_data)
+    except SourceError:
+        _log_pytubefix_fallback(None)
+        return _fetch_english_transcript_with_pytubefix(video_id)
+
+
+def _fetch_english_transcript_with_pytubefix(video_id: str) -> str:
+    """Return an English caption track through pytubefix without media access."""
+    try:
+        from pytubefix import YouTube
+
+        captions = YouTube(canonical_video_url(video_id)).captions
+        caption = _get_english_caption(captions)
+        if caption is None:
+            raise LookupError("English caption track unavailable")
+        transcript = caption.generate_txt_captions().strip()
+        if not transcript:
+            raise ValueError("English caption track is empty")
+    except Exception as error:
+        APP_LOGGER.warning("pytubefix caption fallback failed (%s)", type(error).__name__)
+        if isinstance(error, ImportError):
+            raise SourceError("Install the app dependencies to access YouTube.") from None
+        raise SourceError("No English captions were found for this video.") from None
+    return transcript[:100_000]
+
+
+def _get_english_caption(captions: Any) -> Any:
+    """Select the best available standard English caption code."""
+    regional_codes = set()
+    try:
+        available = list(captions)
+    except TypeError:
+        available = []
+    for item in available:
+        language_code = getattr(item, "code", item if isinstance(item, str) else "")
+        if isinstance(language_code, str) and (
+            language_code.startswith("en-") or language_code.startswith("a.en-")
+        ):
+            regional_codes.add(language_code)
+    ordered_codes = (
+        "en",
+        *sorted(code for code in regional_codes if code.startswith("en-")),
+        "a.en",
+        *sorted(code for code in regional_codes if code.startswith("a.en-")),
+        "en-US",
+        "en-GB",
+        "a.en-US",
+        "a.en-GB",
+    )
+    for language_code in dict.fromkeys(ordered_codes):
+        caption = captions.get(language_code)
+        if caption is not None:
+            return caption
+    return None

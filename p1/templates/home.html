@@ -3,16 +3,23 @@
 {% block content %}
 <section class="home-hero">
   <h1 class="hero-logo">P. 1</h1>
-  <p class="home-caption">Summarize a YouTube video or playlist.</p>
+  <p class="home-caption">Turn a YouTube video or playlist into a clear, searchable summary.</p>
+  <a class="youtube-help" href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">🔗 Find a video or playlist on YouTube</a>
   <form class="home-form" method="post" action="{{ url_for('inspect_source') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <div class="search-form"><input id="source-url" name="source_url" type="url" placeholder="Paste YouTube URL" required>
-    <button class="button button-dark" type="submit">Summarize →</button></div>
+    <label class="source-label" for="source-url"><span class="icon-emoji">🔗</span> YouTube link</label>
+    <div class="search-form"><input id="source-url" name="source_url" type="url" placeholder="Paste a video or playlist URL" required>
+    <button class="button button-dark" type="submit"><span class="icon-emoji">✨</span> Summarize →</button></div>
     <div class="home-options">
-      <label for="target-list">Add single video to</label>
+      <label class="save-label" for="target-list">Save to</label>
       <select id="target-list" name="target_list"><option value="">New archive entry</option>{% for item in summary_lists %}<option value="{{ item.id }}">{{ item.title }}</option>{% endfor %}</select>
+    </div>
+    <p class="save-hint">Existing lists accept single videos. Playlists get their own list.</p>
+    <div class="replacement-option">
       <label class="small-check"><input type="checkbox" name="replace_saved" value="yes"> Replace saved playlist summaries</label>
+      <p>Only replaces saved text when checked.</p>
     </div>
   </form>
+  {% with active_stage=1 %}{% include 'workflow_steps.html' %}{% endwith %}
 </section>
 {% endblock %}
