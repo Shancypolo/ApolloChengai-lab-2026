@@ -44,6 +44,7 @@ MAX_PREFERENCE_LENGTH = 2_000
 MAX_QUESTION_LENGTH = 1_000
 MAX_FILTER_LENGTH = 200
 MAX_LIST_TITLE_LENGTH = 120
+VIDEOS_PER_PAGE = 48
 VIDEO_SORT_OPTIONS = {"original", "published_at", "author", "topic", "title"}
 VIDEO_SORT_LABELS = (
     ("original", "Playlist order"),
@@ -280,17 +281,31 @@ def render_source_results(
     filter_text: str = "",
     selected_ids: set[str] | None = None,
     warning: str = "",
+    page: str = "1",
 ):
     """Render a complete source page with server-sorted selection state."""
     all_ids = [video["id"] for video in source.get("videos", [])]
     selected = set(all_ids) if selected_ids is None else selected_ids
     visible_videos = ordered_source_videos(source, sort_by, filter_text)
+    matching_count = len(visible_videos)
+    page_count = max(1, (matching_count + VIDEOS_PER_PAGE - 1) // VIDEOS_PER_PAGE)
+    page_text = str(page)
+    valid_page = page_text.isascii() and page_text.isdigit() and len(page_text) < 8
+    page_number = min(max(1, int(page_text)), page_count) if valid_page else 1
+    start = (page_number - 1) * VIDEOS_PER_PAGE
+    visible_videos = visible_videos[start:start + VIDEOS_PER_PAGE]
+    visible_videos = [
+        {**video, "display_index": f"{start + index:02d}"}
+        for index, video in enumerate(visible_videos, start=1)
+    ]
     visible_ids = {video["id"] for video in visible_videos}
     return render_template(
         "source_results.html",
         source=source,
         summaries=summaries,
         videos=visible_videos,
+        page_number=page_number, page_count=page_count,
+        matching_count=matching_count, selected_count=len(selected),
         selected_ids=selected,
         hidden_selected_ids=selected - visible_ids,
         sort_by=sort_by if sort_by in VIDEO_SORT_OPTIONS else "original",
@@ -756,6 +771,7 @@ def create_app(
         return {
             "csrf_token": getattr(g, "csrf_token", ""), "app_name": APP_NAME,
             "usage": usage, "display_settings": display_settings,
+            "answer_window": request.values.get("answer_window") == "1",
         }
 
     @app.errorhandler(ValueError)
@@ -850,6 +866,10 @@ def create_app(
             return render_template("notice.html", message="Choose a video or playlist from the link.", tone="error")
         session_id = session["usage_session_id"]
         job_id = app.config["JOBS"].create("inspection", session_id)
+        app.config["JOBS"].update(
+            job_id, source_url=raw_url, source_kind=kind, target_list=target_list,
+            replace_saved=request.form.get("replace_saved") == "yes",
+        )
         job = app.config["JOBS"].get(job_id)
         worker = threading.Thread(
             target=run_source_inspection_job,
@@ -871,6 +891,9 @@ def create_app(
         sort_by = request.values.get("sort_choice") or request.values.get("sort_by", archive["settings"]["default_playlist_sort"])
         filter_text = request.values.get("filter_text", "")
         warning = request.values.get("warning", "")
+        page = request.values.get("page_choice") or request.values.get("page", "1")
+        if request.form.get("list_action") == "filter" or request.form.get("sort_choice"):
+            page = "1"
         selected_ids = all_ids
         if request.method == "POST":
             action = request.form.get("list_action", "")
@@ -910,6 +933,7 @@ def create_app(
             filter_text,
             selected_ids,
             warning,
+            page,
         )
 
     @app.get("/jobs/<job_id>")
@@ -919,10 +943,12 @@ def create_app(
         if not job:
             safe_log(app, "A missing summary job was requested")
             return render_template("notice.html", message="That summary job is no longer available.", tone="error"), 404
+        if job["session_id"] != session["usage_session_id"]:
+            abort(403)
         if job["type"] == "chat":
             if job["status"] not in {"complete", "error"}:
-                return render_template("chat_progress.html", job=job)
-            if job["status"] == "complete" and job.get("source_key"):
+                return render_template("chat_progress.html", job=job, answer_window=job.get("answer_window", False))
+            if job["status"] == "complete" and job.get("source_key") and not job.get("answer_window"):
                 return redirect(url_for(
                     "archive_detail", source_key=job["source_key"],
                     open_video=job["video_id"], _anchor=f"video-{job['video_id']}",
@@ -931,13 +957,17 @@ def create_app(
             return render_template(
                 "chat_answer.html", question=job.get("question", ""), answer=message,
                 tone="success" if job["status"] == "complete" else "error",
+                video_id=job.get("video_id"), answer_window=job.get("answer_window", False),
                 error_notice_message=message if job["status"] == "error" else "",
                 dismiss_url=url_for("archive_index"),
             )
         if job["status"] in {"complete", "partial", "error"}:
+            if job.get("retry_video"):
+                saved = app.config["STORE"].read()["summaries"].get(job["retry_video"])
+                return render_template("retry_result.html", job=job, saved=saved)
             if job["type"] == "inspection":
                 if job["status"] == "error":
-                    return render_template("notice.html", message=job["message"], tone="error")
+                    return render_template("inspection_failure.html", job=job)
                 archive = app.config["STORE"].read()
                 return render_source_results(
                     job["source"],
@@ -1167,6 +1197,7 @@ def create_app(
             return render_template("chat_answer.html", question=question, answer="Enter a question up to 1,000 characters.", tone="error", error_notice_message="Enter a question up to 1,000 characters.", dismiss_url=url_for("archive_index"))
         session_id = session["usage_session_id"]
         job_id = app.config["JOBS"].create("chat", session_id)
+        app.config["JOBS"].update(job_id, video_id=video_id, answer_window=request.form.get("answer_window") == "1")
         job = app.config["JOBS"].get(job_id)
         worker = threading.Thread(
             target=run_chat_job, args=(app, job_id, video_id, question, session_id),
@@ -1174,6 +1205,24 @@ def create_app(
         )
         worker.start()
         return render_template("chat_progress.html", job=job)
+
+    @app.post("/retry-video/<path:source_key>/<video_id>")
+    def retry_video_summary(source_key: str, video_id: str):
+        """Retry one failed video without repeating successful summaries."""
+        archive = app.config["STORE"].read()
+        source = archive["sources"].get(source_key)
+        if not source or video_id not in {video["id"] for video in source["videos"]}:
+            abort(404)
+        session_id = session["usage_session_id"]
+        job_id = app.config["JOBS"].create("summary", session_id, source_key, 1)
+        app.config["JOBS"].update(job_id, retry_video=video_id)
+        worker = threading.Thread(
+            target=run_summary_job,
+            args=(app, job_id, source, [video_id], False, session_id),
+            daemon=True, name=f"pageone-retry-{job_id[:8]}",
+        )
+        worker.start()
+        return render_template("job_progress.html", job=app.config["JOBS"].get(job_id))
 
     return app
 

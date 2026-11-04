@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Archive — PageOne{% endblock %}
 {% block content %}
-<section class="page-heading editorial-heading"><h1>Archive</h1></section>
+<section class="page-heading editorial-heading"><h1>Archive</h1><p class="page-caption">Find saved playlist summaries, lists, and videos.</p></section>
 <form class="archive-search" method="get" action="{{ url_for('archive_index') }}">
   <input id="archive-search" type="search" name="q" value="{{ query }}" maxlength="200" placeholder="Search archive">
-  <button type="submit" title="Search archive">⌕</button>
+  <button type="submit">Search</button>
 </form>
 <p class="file-caption">Archive file: {{ archive_file }}</p>
 <form class="create-list-form" method="post" action="{{ url_for('create_summary_list') }}">

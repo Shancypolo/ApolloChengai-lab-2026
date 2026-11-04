@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Source unavailable — PageOne{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <h1>Source unavailable</h1>
+  <p>{{ job.message }}</p>
+  <form method="post" action="{{ url_for('inspect_source') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="source_url" value="{{ job.source_url }}">
+    <input type="hidden" name="source_kind" value="{{ job.source_kind }}">
+    <input type="hidden" name="target_list" value="{{ job.target_list }}">
+    {% if job.replace_saved %}<input type="hidden" name="replace_saved" value="yes">{% endif %}
+    <button class="button" type="submit">Try again</button>
+  </form>
+</section>
+{% endblock %}
