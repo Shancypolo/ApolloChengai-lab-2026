@@ -141,6 +141,10 @@ If you used an older version, PageOne copies its old saved files to these new na
 - **This is for one person on one computer.** Do not run several copies against the same saved files or expose it to other computers. No account or password protects the local app.
 - **A damaged save file is not overwritten.** Keep a backup; the app reports the problem instead of replacing your notes. If the address will not open, check the command window for an error, including whether another app is already using port 5000.
 
+- **Playlists cannot auto-update** The app cannot automatically check new videos or deleted videos in archived playlists to summarize or change data.
+
+- **
+
 ## What each file is for
 
 You do not need to edit these files to use PageOne. Expand this list only if you want to understand the folder.

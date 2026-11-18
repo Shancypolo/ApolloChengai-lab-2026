@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#e8e7d5" />
+    <title>WHACK! 6×6 — Mole Mayhem</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Barlow+Condensed:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="arcade-shell" id="arcade">
+      <header class="topbar">
+        <div class="brand"><span class="brand-burst">WHACK!</span><span class="brand-grid">6×6</span></div>
+        <div class="stat score-stat"><span>SCORE</span><strong id="score">000000</strong></div>
+        <div class="stat timer-stat"><strong id="timer">00:00</strong><span>ELAPSED</span></div>
+        <div class="stat best-stat"><span>BEST</span><strong id="bestScore">000000</strong></div>
+        <div class="difficulty" aria-label="Difficulty">
+          <span>DIFFICULTY</span>
+          <div class="difficulty-buttons">
+            <button data-difficulty="easy">EASY</button><button class="selected" data-difficulty="medium">MEDIUM</button><button data-difficulty="hard">HARD</button>
+          </div>
+        </div>
+        <div class="top-actions"><button class="icon-button" id="pauseButton" aria-label="Pause game" title="Pause">Ⅱ</button><button class="icon-button sound-on" id="soundButton" aria-label="Toggle sound" title="Sound">♫</button></div>
+      </header>
+
+      <div class="play-layout">
+        <aside class="left-rail">
+          <section class="panel preflight" id="preflight">
+            <h2>BEFORE YOU PLAY…</h2>
+            <div class="permission-grid">
+              <section class="permission-check"><b>MIC <span class="status-dot" id="micStatus"></span></b><p class="access-note" id="micNote">Voice service listens for “BANG”.</p><button class="button secondary" id="micButton">ENABLE MIC</button></section>
+              <section class="permission-check"><b>POP-UPS <span class="status-dot" id="popupStatus"></span></b><p class="access-note" id="popupNote">Check game pop-ups.</p><button class="button secondary popup-button" id="popupButton">CHECK</button></section>
+            </div>
+            <button class="button start-button" id="startButton">START ENDLESS <span>➜</span></button>
+            <small>NO CLOCK RUNNING OUT. KEEP WHACKING!</small>
+          </section>
+          <section class="panel hammer-panel">
+            <h2>HAMMER + PEN</h2>
+            <div class="hammer-control"><div class="weapon"><button class="drag-hammer" id="hammer" aria-label="Drag hammer onto a regular mole">🔨</button><span>DRAG</span></div><div class="weapon"><button class="draw-pen" id="penButton" aria-label="Use drawing pen on painter mole">✎</button><span>DRAW</span></div></div>
+            <div class="hammer-glow">✹</div>
+          </section>
+          <section class="panel record-panel"><h2>TOP WHACKS</h2><ol id="highScores"><li>No scores yet — make history!</li></ol><button class="button end-button" id="endButton">SAVE & STOP</button></section>
+        </aside>
+
+        <section class="game-center" aria-label="Game board">
+          <div class="board-header"><div class="axis-corner"><span>x →</span><span>y ↓</span></div><div class="x-axis" id="xAxis"></div></div>
+          <div class="board-body"><div class="y-axis" id="yAxis"></div><div class="mole-grid" id="grid" aria-label="6 by 6 mole grid"></div></div>
+          <div class="interaction-panel" id="interactionPanel" aria-live="polite"></div>
+          <div class="board-footer"><span>COORDINATES: <b>A–F × 1–6</b></span><span id="streak">STREAK <b>0</b></span></div>
+          <div class="game-overlay hidden" id="gameOverlay">
+            <div class="overlay-card" id="overlayCard">
+              <h2 id="overlayTitle">READY, HERO?</h2>
+              <p id="overlayText">Enable microphone access before the round if you want to face every mole type.</p>
+              <div class="overlay-actions" id="overlayActions"><button class="button start-button" id="overlayStart">START ROUND</button></div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="legend panel" aria-label="Mole manual">
+          <h2>MOLE MANUAL</h2>
+          <p class="legend-intro">Know your target. Pick your attack.</p>
+          <ul>
+            <li><div class="sprite legend-sprite" data-mole="einstein"></div><p><b>EINSTEIN MOLE</b><span>Enter coordinates, then submit.</span></p><em>x/y</em></li>
+            <li><div class="sprite legend-sprite" data-mole="normal"></div><p><b>REGULAR MOLE</b><span>Drag the hammer, then submit.</span></p><em class="mini-hammer">🔨</em></li>
+            <li><div class="sprite legend-sprite" data-mole="painter"></div><p><b>PAINTER MOLE</b><span>Draw a hammer, then submit.</span></p><em class="brush-mark">✎</em></li>
+            <li><div class="sprite legend-sprite" data-mole="coder"></div><p><b>CODER MOLE</b><span>Enter the shortcut, then submit.</span></p><em class="code-mark">⇧A</em></li>
+            <li><div class="sprite legend-sprite" data-mole="wheel"></div><p><b>WHEEL HAMSTER</b><span>Rotate it upright, then submit.</span><em class="wheel-mark"><span>↶</span><span>↷</span></em></li>
+            <li><div class="sprite legend-sprite" data-mole="scream"></div><p><b>SCREAM MOLE</b><span>Yell “BANG!”, then submit.</span><em class="bang-mark">BANG!</em></li>
+          </ul>
+        </aside>
+      </div>
+
+      <div class="hammer-cursor" id="hammerCursor" aria-hidden="true">🔨</div>
+      <div class="confetti-layer" id="confettiLayer" aria-hidden="true"></div>
+    </main>
+    <script src="./game.js"></script>
+  </body>
+</html>

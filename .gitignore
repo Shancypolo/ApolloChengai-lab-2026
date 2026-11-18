@@ -28,3 +28,6 @@ Thumbs.db
 #sensitive data
 people_sensitive*
 data_mappings.json
+
+# mac annoying stuff
+.DS_Store
