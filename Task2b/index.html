@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#cfc4ac"><meta name="description" content="Six troublemakers. One hammer. A square-board comic arcade with a twist.">
+  <title>WHACK! 4×4 — Mole Mayhem</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23fede54'/%3E%3Ctext x='32' y='49' text-anchor='middle' font-size='50' font-weight='900' fill='%23d25845'%3EW!%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Barlow+Condensed:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css?v=14">
+</head>
+<body>
+<main class="arcade-shell" id="arcade">
+  <header class="masthead">
+    <div class="brand"><h1>WHACK!</h1><div class="brand-sub">MOLE<br>MAYHEM</div><span class="edition" aria-label="4 by 4">4×4</span></div>
+    <button id="helpButton" class="text-button" aria-haspopup="dialog">HOW TO PLAY <span aria-hidden="true">↗</span></button>
+    <button class="icon-button sound-on" id="soundButton" aria-label="Mute sound" aria-pressed="true" title="Mute sound"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="sound-waves" d="M17 8q4 4 0 8m3-11q6 7 0 14"/></svg></button>
+  </header>
+  <div class="play-layout">
+    <aside class="control-rail" aria-label="Run controls and records">
+      <section class="panel launch-panel" id="launchPanel"><h2>LET’S MAKE SOME MAYHEM.</h2><p>Six troublemakers.<br>One hammer. No time limit.</p><div class="launch-actions"><button class="button primary" id="startButton">LET’S PLAY <span aria-hidden="true">➜</span></button><div class="run-buttons"><button class="icon-button" id="pauseButton" aria-label="Pause game" title="Pause game" disabled>Ⅱ</button><button class="icon-button" id="endButton" aria-label="Save and stop game" title="Save & stop" disabled>■</button></div></div><small class="run-note">Answers appear automatically.</small></section>
+      <section class="panel scorebar" aria-label="Game status">
+        <div class="stat score-stat"><span>SCORE</span><strong id="score">000000</strong></div>
+        <div class="stat"><span>TIME</span><strong id="timer">00:00</strong></div>
+        <div class="stat best-stat"><span>BEST</span><strong id="bestScore">000000</strong></div>
+        <div class="difficulty" role="group" aria-label="Difficulty"><span>DIFFICULTY</span><div><button data-difficulty="easy" aria-pressed="false">EASY</button><button data-difficulty="medium" class="selected" aria-pressed="true">MEDIUM</button><button data-difficulty="hard" aria-pressed="false">HARD</button></div></div>
+      </section>
+      <section class="panel record-panel"><h2>PERSONAL BEST</h2><ol id="highScores"><li>Your first legend starts here.</li></ol></section>
+    </aside>
+    <section class="game-center" aria-label="Game board">
+      <div class="board-header"><span class="axis-corner" aria-hidden="true">↘</span><div id="xAxis" class="x-axis" aria-hidden="true"></div></div>
+      <div class="board-body"><div id="yAxis" class="y-axis" aria-hidden="true"></div><div id="grid" class="mole-grid" aria-label="Square 4 by 4 mole grid"></div></div>
+      <div class="board-footer"><span id="boardMessage">READY TO RUMBLE</span><span id="streak"><i aria-hidden="true">ϟ</i> STREAK <b>0</b></span></div>
+      <div id="targetProgress" class="target-progress" aria-hidden="true"><i></i></div>
+      <div id="feedbackLayer" class="feedback-layer" aria-hidden="true"></div>
+      <div class="game-overlay hidden" id="gameOverlay"><div class="overlay-card"><span class="overlay-symbol" id="overlaySymbol" aria-hidden="true">Ⅱ</span><h2 id="overlayTitle">TAKE A BREATHER.</h2><p id="overlayText"></p><div class="overlay-actions" id="overlayActions"></div></div></div>
+      <div class="impact" id="impact" aria-hidden="true"></div>
+    </section>
+    <aside class="side-rail" aria-label="Current challenge and field guide">
+      <section class="panel idle-panel"><h2>YOUR NEXT MOVE</h2><p>One mole. One trick.<br>Watch the board—your answer appears right here.</p><span class="idle-arrow" aria-hidden="true">←</span></section>
+      <section id="interactionPanel" class="panel interaction-panel" aria-label="Mole challenge" aria-live="polite" hidden></section>
+      <section class="panel legend" aria-label="Field guide"><h2>FIELD GUIDE</h2><ul>
+        <li data-guide="normal"><span class="sprite portrait" data-mole="normal"></span><p><b>REGULAR</b><span>Drag the hammer.</span></p></li>
+        <li data-guide="einstein"><span class="sprite portrait" data-mole="einstein"></span><p><b>EINSTEIN</b><span>Find the coordinates.</span></p></li>
+        <li data-guide="painter"><span class="sprite portrait" data-mole="painter"></span><p><b>PAINTER</b><span>Draw a hammer.</span></p></li>
+        <li data-guide="coder"><span class="sprite portrait" data-mole="coder"></span><p><b>CODER</b><span>Match the shortcut.</span></p></li>
+        <li data-guide="wheel"><span class="sprite portrait" data-mole="wheel"></span><p><b>WHEEL</b><span>Spin it upright.</span></p></li>
+        <li data-guide="magician"><span class="sprite portrait" data-mole="magician"></span><p><b>MAGICIAN</b><span>Remember the spell.</span></p></li>
+      </ul></section>
+    </aside>
+  </div>
+  <footer class="page-footer"><strong>16 HOLES. ZERO MERCY.</strong></footer>
+  <p class="sr-only" id="announcer" role="status" aria-live="polite"></p>
+</main>
+<dialog id="helpDialog" class="help-dialog" aria-labelledby="helpTitle"><button id="closeHelp" class="icon-button close-help" aria-label="Close instructions">×</button><h2 id="helpTitle">A LITTLE MOLE CONTROL.</h2><p>Press <b>Let’s play</b>. Each mole opens its answer panel automatically. Drag the hammer for Regular, find Einstein’s coordinates, draw for Painter, match Coder’s shortcut, turn Wheel upright, or repeat Magician’s disappearing spell.</p><div class="help-points"><p><b>+100</b> per whack. Each preceding hit in the streak adds <b>+10</b>.</p><p><b>−25</b> for a wrong answer, skip, or escaped mole.</p><p>No run time limit. Each target has its own countdown.</p><p><kbd>Space</kbd> pauses outside inputs and buttons. <kbd>Esc</kbd> closes this guide.</p><p>Keyboard hammer: Enter on the hammer picks it up and focuses the mole. Enter again drops it. Painter: arrow keys draw; Enter lifts the pen. Magician: keys <kbd>1</kbd>–<kbd>4</kbd> repeat the symbols after they disappear.</p></div><p>Designed for a 16:9 computer screen. All six challenges work locally without browser permissions. Sound and reduced-motion preferences are respected.</p><button id="gotIt" class="button primary">GOT IT <span aria-hidden="true">✓</span></button><a class="palette-credit" href="https://lospec.com/palette-list/retro-comic" target="_blank" rel="noopener noreferrer">Colors inspired by Lospec’s Retro Comic palette ↗</a></dialog>
+<div id="hammerCursor" class="hammer-cursor" aria-hidden="true" hidden></div>
+<script src="./game.js?v=14"></script>
+</body>
+</html>

@@ -4,13 +4,13 @@ A standalone browser arcade game built for the T2a assignment. It uses six origi
 
 ## Run it
 
-Open `index.html` in a browser, or serve this folder locally:
+From this folder, run one Python program:
 
 ```sh
-python3 -m http.server 4173
+python3 run_game.py
 ```
 
-Then open `http://127.0.0.1:4173`.
+The launcher starts a local server on an available port and opens the game in your default browser. Keep the terminal window open while playing; press **Ctrl+C** there to stop the server. It uses only Python's standard library and does not install packages. If the browser does not open automatically, the launcher prints the local game URL.
 
 Microphone permission is requested only after pressing **Enable Mic**. If it is denied or unavailable, scream moles are omitted for that run. The scream challenge combines speech recognition for “BANG” with an audio-level check; in browsers without speech recognition, it falls back to a loudness threshold. Recognition processing may use the browser's voice service. The game does not save recordings.
 
